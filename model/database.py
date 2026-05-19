@@ -6,12 +6,10 @@ class DatabaseModel:
         self.db_path = db_path
 
     def _connect(self):
-        """Maakt een connectie met de database."""
         return sqlite3.connect(self.db_path)
 
     @contextmanager
     def _get_cursor(self, commit=False):
-        """Beheert de database connectie, geeft een cursor terug, en sluit netjes af."""
         conn = self._connect()
         cursor = conn.cursor()
         try:
@@ -20,6 +18,26 @@ class DatabaseModel:
                 conn.commit()
         finally:
             conn.close()
+
+    # --- UITBREIDING CO2 ---
+    def setup_co2_uitbreiding(self):
+        """Maakt de nieuwe CO2 tabel aan (bestaande tabellen blijven ongewijzigd) en vult basisdata."""
+        with self._get_cursor(commit=True) as cursor:
+            cursor.execute('''CREATE TABLE IF NOT EXISTS CO2_Normen (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                transport_type TEXT UNIQUE,
+                                co2_per_km REAL)''')
+            
+            # Voeg de standaard uitstoot toe (gebruik REPLACE of IGNORE om dubbele data te voorkomen)
+            standaard_normen = [("fiets", 0), ("bus", 50), ("auto", 120), ("te voet", 0)]
+            for norm in standaard_normen:
+                cursor.execute("INSERT OR IGNORE INTO CO2_Normen (transport_type, co2_per_km) VALUES (?, ?)", norm)
+
+    def get_co2_normen(self):
+        """Haalt de CO2 normen op uit de nieuwe tabel."""
+        with self._get_cursor() as cursor:
+            cursor.execute("SELECT transport_type, co2_per_km FROM CO2_Normen")
+            return cursor.fetchall()
 
     # --- CRUD voor Students ---
     def get_all_students(self):
@@ -37,7 +55,7 @@ class DatabaseModel:
 
     def delete_student(self, student_id):
         with self._get_cursor(commit=True) as cursor:
-            cursor.execute("DELETE FROM Mobility_log WHERE student_id = ?", (student_id,)) # Bewaak consistentie
+            cursor.execute("DELETE FROM Mobility_log WHERE student_id = ?", (student_id,))
             cursor.execute("DELETE FROM Students WHERE id = ?", (student_id,))
 
     # --- CRUD voor Transport ---
@@ -52,7 +70,7 @@ class DatabaseModel:
 
     def delete_transport(self, transport_id):
         with self._get_cursor(commit=True) as cursor:
-            cursor.execute("DELETE FROM Mobility_log WHERE transport_id = ?", (transport_id,)) # Bewaak consistentie
+            cursor.execute("DELETE FROM Mobility_log WHERE transport_id = ?", (transport_id,))
             cursor.execute("DELETE FROM Transport WHERE id = ?", (transport_id,))
 
     # --- CRUD voor Mobility_log ---
@@ -68,3 +86,4 @@ class DatabaseModel:
     def delete_log(self, log_id):
         with self._get_cursor(commit=True) as cursor:
             cursor.execute("DELETE FROM Mobility_log WHERE id = ?", (log_id,))
+        
