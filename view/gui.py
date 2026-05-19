@@ -269,3 +269,60 @@ class MainView(tk.Tk):
     def get_selected_id(self, tree):
         selected = tree.selection()
         return tree.item(selected[0])['values'][0] if selected else None
+    
+    # VOEG DIT TOE IN JE `MainView` KLASSE ONDERAAN DE `_build_dashboard_tab` FUNCTIE:
+
+    def _build_dashboard_tab(self):
+        self.dashboard_notebook = ttk.Notebook(self.tab_dashboard)
+        self.dashboard_notebook.pack(expand=True, fill='both', padx=5, pady=5)
+
+        self.tab_overzicht = ttk.Frame(self.dashboard_notebook)
+        self.tab_vervoer_analyse = ttk.Frame(self.dashboard_notebook)
+        self.tab_afstand_analyse = ttk.Frame(self.dashboard_notebook)
+        self.tab_klassen_analyse = ttk.Frame(self.dashboard_notebook)
+        self.tab_co2_analyse = ttk.Frame(self.dashboard_notebook) # NIEUW: CO2 Tab
+
+        self.dashboard_notebook.add(self.tab_overzicht, text='Overzicht Data')
+        self.dashboard_notebook.add(self.tab_vervoer_analyse, text='Vervoersmiddelen Analyse')
+        self.dashboard_notebook.add(self.tab_afstand_analyse, text='Afstand Analyse')
+        self.dashboard_notebook.add(self.tab_klassen_analyse, text='Klassenanalyse')
+        self.dashboard_notebook.add(self.tab_co2_analyse, text='CO₂ Analyse (Uitbreiding)') # NIEUW
+
+        self._build_overzicht_ui()
+        self._build_vervoer_analyse_ui()
+        self._build_afstand_analyse_ui()
+        self._build_klassen_analyse_ui()
+        self._build_co2_analyse_ui() # NIEUW
+
+    # NIEUWE FUNCTIE VOOR JE GUI.PY:
+    def _build_co2_analyse_ui(self):
+        """Uitbreiding 1: CO2 Analyse met filters"""
+        # Filter sectie
+        filter_frame = ttk.LabelFrame(self.tab_co2_analyse, text="Filters")
+        filter_frame.pack(fill='x', padx=10, pady=5)
+
+        ttk.Label(filter_frame, text="Klas:").grid(row=0, column=0, padx=5, pady=5)
+        self.combo_filter_klas = ttk.Combobox(filter_frame, state="readonly", width=10)
+        self.combo_filter_klas.grid(row=0, column=1, padx=5, pady=5)
+
+        ttk.Label(filter_frame, text="Vervoer:").grid(row=0, column=2, padx=5, pady=5)
+        self.combo_filter_vervoer = ttk.Combobox(filter_frame, state="readonly", width=10)
+        self.combo_filter_vervoer.grid(row=0, column=3, padx=5, pady=5)
+
+        ttk.Label(filter_frame, text="Afstand:").grid(row=0, column=4, padx=5, pady=5)
+        self.combo_filter_afstand = ttk.Combobox(filter_frame, values=["Alle", "Kort (0-5 km)", "Middel (5.1-10 km)", "Lang (>10 km)"], state="readonly", width=15)
+        self.combo_filter_afstand.set("Alle")
+        self.combo_filter_afstand.grid(row=0, column=5, padx=5, pady=5)
+
+        ttk.Button(filter_frame, text="Pas Filters Toe", command=lambda: self.controller.update_co2_analyse()).grid(row=0, column=6, padx=10, pady=5)
+
+        # Tabel sectie
+        self.tree_co2_stat = ttk.Treeview(self.tab_co2_analyse, columns=("Vervoersmiddel", "Aantal Ritten", "Totale CO2 (gram)"), show="headings", height=4)
+        for h in ("Vervoersmiddel", "Aantal Ritten", "Totale CO2 (gram)"):
+            self.tree_co2_stat.heading(h, text=h)
+            self.tree_co2_stat.column(h, anchor="center")
+        self.tree_co2_stat.pack(fill='x', padx=10, pady=10)
+
+        # Grafiek sectie
+        self.canvas_co2 = tk.Canvas(self.tab_co2_analyse, bg='white', height=250)
+        self.canvas_co2.pack(fill='both', expand=True, padx=10, pady=5)
