@@ -235,3 +235,45 @@ class CO2AnalyseFrame(ttk.Frame):
 
         self.canvas_co2 = tk.Canvas(right_card, bg='white', bd=1, highlightthickness=0, relief="solid")
         self.canvas_co2.pack(fill='both', expand=True, padx=10, pady=(5, 10))
+
+
+class GezondheidAnalyseFrame(ttk.Frame):
+    def __init__(self, parent, view):
+        super().__init__(parent)
+        self.view = view
+
+        # Stats list card
+        list_card = ttk.LabelFrame(self, text="Gezondheidsindex per Klas")
+        list_card.pack(fill='x', padx=15, pady=10)
+
+        tree_frame = ttk.Frame(list_card)
+        tree_frame.pack(fill='x', padx=10, pady=10)
+
+        self.tree_gezondheid_stat = ttk.Treeview(tree_frame, columns=("Klas", "Actieve Ritten", "Passieve Ritten", "Gezondheidsindex (%)"), show="headings", height=4)
+        for h in ("Klas", "Aantal Ritten", "Percentage"): # Wait! The header text:
+            pass
+        self.tree_gezondheid_stat.heading("Klas", text="Klas")
+        self.tree_gezondheid_stat.heading("Actieve Ritten", text="Actieve Ritten (Fiets/Voet)")
+        self.tree_gezondheid_stat.heading("Passieve Ritten", text="Passieve Ritten (Auto/Bus)")
+        self.tree_gezondheid_stat.heading("Gezondheidsindex (%)", text="Gezondheidsindex (%)")
+        
+        for col in ("Klas", "Actieve Ritten", "Passieve Ritten", "Gezondheidsindex (%)"):
+            self.tree_gezondheid_stat.column(col, anchor="center", width=140)
+            
+        self.tree_gezondheid_stat.pack(side='left', fill='both', expand=True)
+        
+        sb = ttk.Scrollbar(tree_frame, orient="vertical", command=self.tree_gezondheid_stat.yview)
+        self.tree_gezondheid_stat.configure(yscrollcommand=sb.set)
+        sb.pack(side='right', fill='y')
+        
+        # Chart Card
+        chart_card = ttk.LabelFrame(self, text="Visuele Milieuanalyse (Actief vs. Passief)")
+        chart_card.pack(fill='both', expand=True, padx=15, pady=(5, 15))
+
+        btn_frame = ttk.Frame(chart_card)
+        btn_frame.pack(fill='x', padx=10, pady=(5, 0))
+        self.btn_toggle_gezondheid = ttk.Button(btn_frame, text="Wissel Grafiektype", command=lambda: self.view.toggle_grafiek('gezondheid'))
+        self.btn_toggle_gezondheid.pack(side='right')
+
+        self.canvas_gezondheid = tk.Canvas(chart_card, bg='white', bd=1, highlightthickness=0, relief="solid")
+        self.canvas_gezondheid.pack(fill='both', expand=True, padx=10, pady=(5, 10))
