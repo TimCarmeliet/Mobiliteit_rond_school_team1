@@ -40,6 +40,7 @@ class Controller:
             self.view.combo_filter_vervoer.set("Alle")
             
         self.update_co2_analyse()
+        self.update_gezondheid_analyse(studenten, transports, logs)
 
     def laad_overzicht_tabel(self):
         """Laadt de ruwe databasetabel gekozen in het dashboard tabblad."""
@@ -308,6 +309,54 @@ class Controller:
         self.model.delete_log(log_id)
         self.refresh_all_tables()
         self.view.show_info("Log verwijderd.")
+
+    def update_gezondheid_analyse(self, studenten, transports, logs):
+        """Berekent de Gezondheidsindex (Actief vs. Passief) per klas en voor de gehele school."""
+        stud_klas = {s[0]: str(s[2]).strip() for s in studenten}
+        trans_type = {t[0]: str(t[1]).strip().lower() for t in transports}
+        
+        classes = sorted(list(set(stud_klas.values())))
+        class_active = {klas: 0 for klas in classes}
+        class_passive = {klas: 0 for klas in classes}
+        
+        for log in logs:
+            student_id = log[1]
+            transport_id = log[2]
+            klas = stud_klas.get(student_id)
+            t_type = trans_type.get(transport_id)
+            
+            if klas and t_type:
+                if t_type in ['fiets', 'te voet']:
+                    class_active[klas] += 1
+                elif t_type in ['auto', 'bus']:
+                    class_passive[klas] += 1
+                    
+        rows = []
+        bar_data = {}
+        for klas in classes:
+            actief = class_active[klas]
+            passief = class_passive[klas]
+            tot = actief + passief
+            pct = round((actief / tot) * 100, 1) if tot > 0 else 0.0
+            
+            rows.append((klas, actief, passief, f"{pct}%"))
+            bar_data[klas] = pct
+            
+        self.view.populate_tree(self.view.tree_gezondheid_stat, rows)
+        
+        totaal_actief = sum(class_active.values())
+        totaal_passief = sum(class_passive.values())
+        
+        pie_data = {
+            "Actief Vervoer (Fiets, Voet)": totaal_actief,
+            "Passief Vervoer (Auto, Bus)": totaal_passief
+        }
+        
+        self.view.update_grafiek(
+            'gezondheid', 
+            {'pie': pie_data, 'bar': bar_data}, 
+            "Gezondheidsindex (Actief vs. Passief)"
+        )
 
     def start(self):
         self.view.mainloop()

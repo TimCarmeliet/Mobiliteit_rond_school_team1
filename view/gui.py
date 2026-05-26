@@ -5,7 +5,7 @@ from tkinter import ttk, messagebox
 from view.beheer_frames import StudentenBeheerFrame, VervoersmiddelenFrame, VerplaatsingenFrame
 from view.dashboard_frames import (
     OverzichtDataFrame, VervoersmiddelenAnalyseFrame, AfstandAnalyseFrame,
-    KlassenAnalyseFrame, CategorieAnalyseFrame, CO2AnalyseFrame
+    KlassenAnalyseFrame, CategorieAnalyseFrame, CO2AnalyseFrame, GezondheidAnalyseFrame
 )
 import view.charts as charts
 
@@ -22,7 +22,8 @@ class MainView(tk.Tk):
             'afstand': {'type': 'bar', 'data': {}, 'titel': ""},
             'klassen': {'type': 'bar', 'data': {}, 'titel': ""},
             'categorie': {'type': 'pie', 'data': {}, 'titel': ""},
-            'co2': {'type': 'bar', 'data': {}, 'titel': ""}
+            'co2': {'type': 'bar', 'data': {}, 'titel': ""},
+            'gezondheid': {'type': 'pie', 'data': {}, 'titel': ""}
         }
 
         # 1. Clean, High-Contrast Light Styling Configuration
@@ -132,6 +133,7 @@ class MainView(tk.Tk):
         self.klassen_analyse_frame = KlassenAnalyseFrame(self.dashboard_notebook, self)
         self.categorie_analyse_frame = CategorieAnalyseFrame(self.dashboard_notebook, self)
         self.co2_analyse_frame = CO2AnalyseFrame(self.dashboard_notebook, self)
+        self.tab_gezondheid_analyse = GezondheidAnalyseFrame(self.dashboard_notebook, self)
 
         # Toevoegen aan sub-notebook
         self.dashboard_notebook.add(self.overzicht_frame, text='Overzicht Data')
@@ -140,6 +142,7 @@ class MainView(tk.Tk):
         self.dashboard_notebook.add(self.klassen_analyse_frame, text='Klassenanalyse')
         self.dashboard_notebook.add(self.categorie_analyse_frame, text='Afstandscategorieën (Extra)')
         self.dashboard_notebook.add(self.co2_analyse_frame, text='CO₂ Analyse (Uitbreiding)')
+        self.dashboard_notebook.add(self.tab_gezondheid_analyse, text='Gezondheidsindex')
 
     def _map_sub_properties(self):
         """Mapt alle sub-component eigenschappen direct op self om controller.py intact te houden."""
@@ -192,6 +195,11 @@ class MainView(tk.Tk):
         self.btn_toggle_co2 = self.co2_analyse_frame.btn_toggle_co2
         self.canvas_co2 = self.co2_analyse_frame.canvas_co2
 
+        # Gezondheid Analyse Mappings
+        self.tree_gezondheid_stat = self.tab_gezondheid_analyse.tree_gezondheid_stat
+        self.btn_toggle_gezondheid = self.tab_gezondheid_analyse.btn_toggle_gezondheid
+        self.canvas_gezondheid = self.tab_gezondheid_analyse.canvas_gezondheid
+
 
     # ==========================================
     # CRISP FLAT DRAWINGS (BRIDGED TO CHARTS MODULE)
@@ -207,12 +215,18 @@ class MainView(tk.Tk):
         canvas = getattr(self, f"canvas_{chart_id}")
         btn = getattr(self, f"btn_toggle_{chart_id}")
         
+        # Extract correct subset if there are distinct datasets for pie vs bar (like Health index)
+        if isinstance(state['data'], dict) and 'pie' in state['data'] and 'bar' in state['data']:
+            chart_data = state['data']['pie'] if state['type'] == 'pie' else state['data']['bar']
+        else:
+            chart_data = state['data']
+            
         # Roep de gedeelde module charts.py aan om de visualisatie op te bouwen
         if state['type'] == 'pie':
-            charts.teken_cirkeldiagram(canvas, state['data'], state['titel'])
+            charts.teken_cirkeldiagram(canvas, chart_data, state['titel'])
             btn.config(text=" Wissel naar Staafdiagram ")
         else:
-            charts.teken_grafiek(canvas, state['data'], state['titel'])
+            charts.teken_grafiek(canvas, chart_data, state['titel'])
             btn.config(text=" Wissel naar Cirkeldiagram ")
 
     def toggle_grafiek(self, chart_id):
