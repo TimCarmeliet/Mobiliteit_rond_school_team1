@@ -64,21 +64,29 @@ def insert_team_data(cursor):
     print("Testgegevens van het projectteam zijn toegevoegd.")
 
 def main():
+    # Zorg dat we met een schone lei beginnen door de oude DB te verwijderen indien mogelijk
+    if os.path.exists(DB_PATH):
+        try:
+            os.remove(DB_PATH)
+            print(f"Oude databank '{DB_PATH}' verwijderd voor een schone import.")
+        except Exception as e:
+            print(f"Waarschuwing: Kon '{DB_PATH}' niet direct verwijderen: {e}")
+
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     create_tables(cursor)
 
-    # Importeer de CSV bestanden. Pas de bestandsnamen aan indien ze anders heten op Smartschool.
-    import_csv_to_table(cursor, 'Students.csv', 'Students', 'INSERT INTO Students (id, naam, klas, afstand) VALUES (?, ?, ?, ?)')
-    import_csv_to_table(cursor, 'Transports.csv', 'Transport', 'INSERT INTO Transport (id, type) VALUES (?, ?)')
-    import_csv_to_table(cursor, 'Mobility_logs.csv', 'Mobility_log', 'INSERT INTO Mobility_log (id, student_id, transport_id, datum) VALUES (?, ?, ?, ?)')
+    # Importeer de CSV bestanden met exact de juiste bestandsnamen uit data/
+    import_csv_to_table(cursor, 'students.csv', 'Students', 'INSERT INTO Students (id, naam, klas, afstand) VALUES (?, ?, ?, ?)')
+    import_csv_to_table(cursor, 'transport.csv', 'Transport', 'INSERT INTO Transport (id, type) VALUES (?, ?)')
+    import_csv_to_table(cursor, 'mobility_log.csv', 'Mobility_log', 'INSERT INTO Mobility_log (id, student_id, transport_id, datum) VALUES (?, ?, ?, ?)')
 
     insert_team_data(cursor)
 
     conn.commit()
     conn.close()
-    print("Database succesvol opgezet en gevuld!")
+    print("Database succesvol opgezet en gevuld met alle 600+ records!")
 
 if __name__ == '__main__':
     # Zorg dat je dit script runt vanuit de hoofdmap van je project, 

@@ -1,16 +1,93 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 
+# Importeer de gedecoupleerde sub-componenten en chart utilities
+from view.beheer_frames import StudentenBeheerFrame, VervoersmiddelenFrame, VerplaatsingenFrame
+from view.dashboard_frames import (
+    OverzichtDataFrame, VervoersmiddelenAnalyseFrame, AfstandAnalyseFrame,
+    KlassenAnalyseFrame, CategorieAnalyseFrame, CO2AnalyseFrame
+)
+import view.charts as charts
+
 class MainView(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Mobiliteit rond de School - Project")
-        self.geometry("1000x750") # Iets ruimer gemaakt voor de grafieken
+        self.geometry("1100x850") 
         self.controller = None
         
+        # Geheugen voor de status van de grafieken
+        self.chart_states = {
+            'vervoer': {'type': 'pie', 'data': {}, 'titel': ""},
+            'afstand': {'type': 'bar', 'data': {}, 'titel': ""},
+            'klassen': {'type': 'bar', 'data': {}, 'titel': ""},
+            'categorie': {'type': 'pie', 'data': {}, 'titel': ""},
+            'co2': {'type': 'bar', 'data': {}, 'titel': ""}
+        }
+
+        # 1. Clean, High-Contrast Light Styling Configuration
         style = ttk.Style(self)
         style.theme_use('clam')
         
+        bg_window = "#f4f5f8"      # Light grey background
+        bg_card = "#ffffff"        # Pure white background
+        fg_text = "#2c3e50"        # High contrast charcoal text
+        fg_muted = "#5a6b7c"       # Muted slate text
+        border_color = "#dcdfe6"   # Clean borders
+        accent_color = "#4a90e2"   # Professional blue
+        danger_color = "#e74c3c"   # Clean red for delete
+        alternate_row = "#f8f9fa"  # Alternate list rows
+
+        # Algemene stijl instellingen
+        style.configure('.', background=bg_window, foreground=fg_text, font=('Arial', 10))
+        style.configure('TFrame', background=bg_window)
+        style.configure('TLabel', background=bg_window, foreground=fg_text, font=('Arial', 10))
+        
+        # Hoofd Notebook styling
+        style.configure('TNotebook', background=bg_window, borderwidth=1, bordercolor=border_color)
+        style.configure('TNotebook.Tab', background="#e4e7ed", foreground=fg_text, font=('Arial', 10, 'bold'), padding=(15, 6))
+        style.map('TNotebook.Tab',
+            background=[('selected', bg_card)],
+            foreground=[('selected', accent_color)]
+        )
+
+        # Buttons (Clean flat with clear contrast)
+        style.configure('TButton', font=('Arial', 10, 'bold'), borderwidth=1, bordercolor=border_color, padding=5)
+        style.map('TButton',
+            background=[('active', '#e4e7ed'), ('!disabled', '#ffffff')],
+            foreground=[('active', accent_color), ('!disabled', fg_text)]
+        )
+        style.configure('Danger.TButton', font=('Arial', 10, 'bold'), borderwidth=1, bordercolor=border_color, padding=5)
+        style.map('Danger.TButton',
+            background=[('active', '#fde8e8'), ('!disabled', '#ffffff')],
+            foreground=[('active', danger_color), ('!disabled', danger_color)]
+        )
+
+        # Form Inputs & Comboboxes (Perfect contrast, no white-on-white)
+        style.configure('TEntry', fieldbackground="#ffffff", foreground=fg_text, bordercolor=border_color, insertcolor=fg_text, relief='flat')
+        style.configure('TCombobox', fieldbackground="#ffffff", background="#ffffff", foreground=fg_text, bordercolor=border_color, arrowcolor=fg_muted)
+        style.map('TCombobox', 
+            fieldbackground=[('readonly', '#ffffff')], 
+            background=[('readonly', '#ffffff')], 
+            foreground=[('readonly', fg_text)]
+        )
+
+        # LabelFrame
+        style.configure('TLabelframe', font=('Arial', 10, 'bold'), bordercolor=border_color, borderwidth=1, background=bg_window)
+        style.configure('TLabelframe.Label', font=('Arial', 10, 'bold'), background=bg_window, foreground=fg_text)
+
+        # Treeview (Neat high contrast tables)
+        style.configure('Treeview', font=('Arial', 10), rowheight=26, background=bg_card, fieldbackground=bg_card, foreground=fg_text, bordercolor=border_color, borderwidth=1)
+        style.configure('Treeview.Heading', font=('Arial', 10, 'bold'), background="#e4e7ed", foreground=fg_text, relief='flat', borderwidth=0)
+        style.map('Treeview', 
+            background=[('selected', accent_color)], 
+            foreground=[('selected', '#ffffff')],
+            alternatebackground=[('!selected', alternate_row)]
+        )
+
+        self.config(bg=bg_window)
+
+        # 2. Hoofd Notebook (Original Structure)
         self.notebook = ttk.Notebook(self)
         self.notebook.pack(expand=True, fill='both', padx=10, pady=10)
         
@@ -20,182 +97,174 @@ class MainView(tk.Tk):
         self.notebook.add(self.tab_beheer, text='Data Beheer (CRUD)')
         self.notebook.add(self.tab_dashboard, text='Dashboard & Analyses')
         
+        # 3. Bouw de gedecoupleerde sub-componenten
         self._build_beheer_tab()
-        self._build_dashboard_tab() # Nieuwe dashboard UI initialisatie
+        self._build_dashboard_tab()
 
+        # 4. Map alle sub-widget eigenschappen naar MainView (Voor perfecte Controller backwards compatibility!)
+        self._map_sub_properties()
+
+    # ==========================================
+    # SUB-COMPONENT FRAME BUILDERS
+    # ==========================================
     def _build_beheer_tab(self):
-        # Maak een sub-notebook voor de CRUD operaties
         self.beheer_notebook = ttk.Notebook(self.tab_beheer)
         self.beheer_notebook.pack(expand=True, fill='both', padx=5, pady=5)
 
-        self.tab_studenten = ttk.Frame(self.beheer_notebook)
-        self.tab_vervoer = ttk.Frame(self.beheer_notebook)
-        self.tab_logs = ttk.Frame(self.beheer_notebook)
+        # Instantiëren van de gedecoupleerde sub-frames
+        self.studenten_frame = StudentenBeheerFrame(self.beheer_notebook, self)
+        self.vervoer_frame = VervoersmiddelenFrame(self.beheer_notebook, self)
+        self.logs_frame = VerplaatsingenFrame(self.beheer_notebook, self)
 
-        self.beheer_notebook.add(self.tab_studenten, text='Studenten Beheren')
-        self.beheer_notebook.add(self.tab_vervoer, text='Vervoersmiddelen')
-        self.beheer_notebook.add(self.tab_logs, text='Verplaatsingen (Logs)')
+        # Toevoegen aan sub-notebook
+        self.beheer_notebook.add(self.studenten_frame, text='Studenten Beheren')
+        self.beheer_notebook.add(self.vervoer_frame, text='Vervoersmiddelen')
+        self.beheer_notebook.add(self.logs_frame, text='Verplaatsingen (Logs)')
 
-        self._build_student_ui()
-        self._build_vervoer_ui()
-        self._build_logs_ui()
-
-    # --- UI: Studenten ---
-    def _build_student_ui(self):
-        form_frame = ttk.Frame(self.tab_studenten)
-        form_frame.pack(fill="x", padx=10, pady=5)
-        
-        ttk.Label(form_frame, text="Naam:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
-        self.entry_naam = ttk.Entry(form_frame)
-        self.entry_naam.grid(row=0, column=1, padx=5, pady=5)
-        
-        ttk.Label(form_frame, text="Klas:").grid(row=0, column=2, padx=5, pady=5, sticky="e")
-        self.entry_klas = ttk.Entry(form_frame)
-        self.entry_klas.grid(row=0, column=3, padx=5, pady=5)
-        
-        ttk.Label(form_frame, text="Afstand (km):").grid(row=0, column=4, padx=5, pady=5, sticky="e")
-        self.entry_afstand = ttk.Entry(form_frame)
-        self.entry_afstand.grid(row=0, column=5, padx=5, pady=5)
-        
-        btn_frame = ttk.Frame(self.tab_studenten)
-        btn_frame.pack(fill="x", padx=10, pady=5)
-        ttk.Button(btn_frame, text="Toevoegen", command=lambda: self.controller.add_student()).pack(side="left", padx=5)
-        ttk.Button(btn_frame, text="Aanpassen", command=lambda: self.controller.update_student()).pack(side="left", padx=5)
-        ttk.Button(btn_frame, text="Verwijderen", command=lambda: self.controller.delete_student()).pack(side="left", padx=5)
-        ttk.Button(btn_frame, text="Leegmaken", command=self.clear_student_form).pack(side="left", padx=5)
-        
-        self.tree_students = ttk.Treeview(self.tab_studenten, columns=("id", "naam", "klas", "afstand"), show="headings")
-        for col, text in zip(("id", "naam", "klas", "afstand"), ("ID", "Naam", "Klas", "Afstand (km)")):
-            self.tree_students.heading(col, text=text)
-        self.tree_students.column("id", width=50)
-        self.tree_students.pack(fill="both", expand=True, padx=10, pady=10)
-        self.tree_students.bind("<<TreeviewSelect>>", self._on_select_student)
-
-    # --- UI: Vervoersmiddelen ---
-    def _build_vervoer_ui(self):
-        form_frame = ttk.Frame(self.tab_vervoer)
-        form_frame.pack(fill="x", padx=10, pady=5)
-        
-        ttk.Label(form_frame, text="Type Vervoer:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
-        self.entry_vervoer_type = ttk.Entry(form_frame)
-        self.entry_vervoer_type.grid(row=0, column=1, padx=5, pady=5)
-        
-        btn_frame = ttk.Frame(self.tab_vervoer)
-        btn_frame.pack(fill="x", padx=10, pady=5)
-        ttk.Button(btn_frame, text="Toevoegen", command=lambda: self.controller.add_transport()).pack(side="left", padx=5)
-        ttk.Button(btn_frame, text="Verwijderen", command=lambda: self.controller.delete_transport()).pack(side="left", padx=5)
-        
-        self.tree_trans = ttk.Treeview(self.tab_vervoer, columns=("id", "type"), show="headings")
-        self.tree_trans.heading("id", text="ID")
-        self.tree_trans.heading("type", text="Type")
-        self.tree_trans.column("id", width=50)
-        self.tree_trans.pack(fill="both", expand=True, padx=10, pady=10)
-
-    # --- UI: Verplaatsingen (Logs) ---
-    def _build_logs_ui(self):
-        form_frame = ttk.Frame(self.tab_logs)
-        form_frame.pack(fill="x", padx=10, pady=5)
-        
-        ttk.Label(form_frame, text="Student:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
-        self.combo_student = ttk.Combobox(form_frame, state="readonly", width=30)
-        self.combo_student.grid(row=0, column=1, padx=5, pady=5)
-        
-        ttk.Label(form_frame, text="Vervoer:").grid(row=0, column=2, padx=5, pady=5, sticky="e")
-        self.combo_vervoer = ttk.Combobox(form_frame, state="readonly", width=15)
-        self.combo_vervoer.grid(row=0, column=3, padx=5, pady=5)
-        
-        ttk.Label(form_frame, text="Datum (DD/MM/YYYY):").grid(row=0, column=4, padx=5, pady=5, sticky="e")
-        self.entry_datum = ttk.Entry(form_frame)
-        self.entry_datum.grid(row=0, column=5, padx=5, pady=5)
-        
-        btn_frame = ttk.Frame(self.tab_logs)
-        btn_frame.pack(fill="x", padx=10, pady=5)
-        ttk.Button(btn_frame, text="Toevoegen", command=lambda: self.controller.add_log()).pack(side="left", padx=5)
-        ttk.Button(btn_frame, text="Verwijderen", command=lambda: self.controller.delete_log()).pack(side="left", padx=5)
-        ttk.Button(btn_frame, text="Vernieuw Lijsten", command=lambda: self.controller.refresh_all_tables()).pack(side="left", padx=5)
-
-        self.tree_logs = ttk.Treeview(self.tab_logs, columns=("id", "student", "vervoer", "datum"), show="headings")
-        for col, text in zip(("id", "student", "vervoer", "datum"), ("ID", "Student ID", "Transport ID", "Datum")):
-            self.tree_logs.heading(col, text=text)
-        self.tree_logs.column("id", width=50)
-        self.tree_logs.pack(fill="both", expand=True, padx=10, pady=10)
-
-    # --- UI: DASHBOARD (NIEUW!) ---
     def _build_dashboard_tab(self):
-        """Bouwt de interface voor de dashboards en analyses met tabbladen."""
         self.dashboard_notebook = ttk.Notebook(self.tab_dashboard)
         self.dashboard_notebook.pack(expand=True, fill='both', padx=5, pady=5)
 
-        self.tab_overzicht = ttk.Frame(self.dashboard_notebook)
-        self.tab_vervoer_analyse = ttk.Frame(self.dashboard_notebook)
-        self.tab_afstand_analyse = ttk.Frame(self.dashboard_notebook)
-        self.tab_klassen_analyse = ttk.Frame(self.dashboard_notebook)
+        # Instantiëren van de gedecoupleerde sub-frames
+        self.overzicht_frame = OverzichtDataFrame(self.dashboard_notebook, self)
+        self.vervoer_analyse_frame = VervoersmiddelenAnalyseFrame(self.dashboard_notebook, self)
+        self.afstand_analyse_frame = AfstandAnalyseFrame(self.dashboard_notebook, self)
+        self.klassen_analyse_frame = KlassenAnalyseFrame(self.dashboard_notebook, self)
+        self.categorie_analyse_frame = CategorieAnalyseFrame(self.dashboard_notebook, self)
+        self.co2_analyse_frame = CO2AnalyseFrame(self.dashboard_notebook, self)
 
-        self.dashboard_notebook.add(self.tab_overzicht, text='Overzicht Data')
-        self.dashboard_notebook.add(self.tab_vervoer_analyse, text='Vervoersmiddelen Analyse')
-        self.dashboard_notebook.add(self.tab_afstand_analyse, text='Afstand Analyse')
-        self.dashboard_notebook.add(self.tab_klassen_analyse, text='Klassenanalyse')
+        # Toevoegen aan sub-notebook
+        self.dashboard_notebook.add(self.overzicht_frame, text='Overzicht Data')
+        self.dashboard_notebook.add(self.vervoer_analyse_frame, text='Vervoersmiddelen')
+        self.dashboard_notebook.add(self.afstand_analyse_frame, text='Afstand Analyse')
+        self.dashboard_notebook.add(self.klassen_analyse_frame, text='Klassenanalyse')
+        self.dashboard_notebook.add(self.categorie_analyse_frame, text='Afstandscategorieën (Extra)')
+        self.dashboard_notebook.add(self.co2_analyse_frame, text='CO₂ Analyse (Uitbreiding)')
 
-        self._build_overzicht_ui()
-        self._build_vervoer_analyse_ui()
-        self._build_afstand_analyse_ui()
-        self._build_klassen_analyse_ui()
+    def _map_sub_properties(self):
+        """Mapt alle sub-component eigenschappen direct op self om controller.py intact te houden."""
+        # Studenten Beheer
+        self.entry_naam = self.studenten_frame.entry_naam
+        self.entry_klas = self.studenten_frame.entry_klas
+        self.entry_afstand = self.studenten_frame.entry_afstand
+        self.tree_students = self.studenten_frame.tree_students
 
-    def _build_overzicht_ui(self):
-        """Tabblad 1: Dynamische weergave van één gekozen tabel."""
-        top_frame = ttk.Frame(self.tab_overzicht)
-        top_frame.pack(fill='x', padx=10, pady=10)
-        
-        ttk.Label(top_frame, text="Kies te bekijken tabel:").pack(side='left', padx=5)
-        self.combo_overzicht_tabel = ttk.Combobox(top_frame, values=['Students', 'Transport', 'Mobility_log'], state='readonly')
-        self.combo_overzicht_tabel.set('Students')
-        self.combo_overzicht_tabel.pack(side='left', padx=5)
-        self.combo_overzicht_tabel.bind("<<ComboboxSelected>>", lambda e: self.controller.laad_overzicht_tabel())
-        
-        self.tree_overzicht = ttk.Treeview(self.tab_overzicht)
-        self.tree_overzicht.pack(fill='both', expand=True, padx=10, pady=10)
+        # Vervoer Beheer
+        self.entry_vervoer_type = self.vervoer_frame.entry_vervoer_type
+        self.tree_trans = self.vervoer_frame.tree_trans
 
-    def _build_vervoer_analyse_ui(self):
-        """Tabblad 2: Verdeling van de vervoersmiddelen met een tabel en staafdiagram."""
-        self.tree_vervoer_stat = ttk.Treeview(self.tab_vervoer_analyse, columns=("Vervoersmiddel", "Aantal Ritten", "Percentage"), show="headings", height=5)
-        for h in ("Vervoersmiddel", "Aantal Ritten", "Percentage"):
-            self.tree_vervoer_stat.heading(h, text=h)
-            self.tree_vervoer_stat.column(h, anchor="center")
-        self.tree_vervoer_stat.pack(fill='x', padx=10, pady=10)
-        
-        self.canvas_vervoer = tk.Canvas(self.tab_vervoer_analyse, bg='white', height=280)
-        self.canvas_vervoer.pack(fill='both', expand=True, padx=10, pady=5)
+        # Logs Beheer
+        self.combo_student = self.logs_frame.combo_student
+        self.combo_vervoer = self.logs_frame.combo_vervoer
+        self.entry_datum = self.logs_frame.entry_datum
+        self.tree_logs = self.logs_frame.tree_logs
 
-    def _build_afstand_analyse_ui(self):
-        """Tabblad 3: Analyse van de afstanden tot school."""
-        self.lbl_gem_afstand_totaal = ttk.Label(self.tab_afstand_analyse, text="Algemene gemiddelde afstand tot school: -- km", font=("Arial", 11, "bold"))
-        self.lbl_gem_afstand_totaal.pack(padx=10, pady=10, anchor='w')
-        
-        self.tree_afstand_stat = ttk.Treeview(self.tab_afstand_analyse, columns=("Vervoersmiddel", "Gemiddelde Afstand (km)", "Totaal Aantal km (Extra)"), show="headings", height=5)
-        for h in ("Vervoersmiddel", "Gemiddelde Afstand (km)", "Totaal Aantal km (Extra)"):
-            self.tree_afstand_stat.heading(h, text=h)
-            self.tree_afstand_stat.column(h, anchor="center")
-        self.tree_afstand_stat.pack(fill='x', padx=10, pady=10)
-        
-        self.canvas_afstand = tk.Canvas(self.tab_afstand_analyse, bg='white', height=250)
-        self.canvas_afstand.pack(fill='both', expand=True, padx=10, pady=5)
+        # Dashboard Overzicht
+        self.combo_overzicht_tabel = self.overzicht_frame.combo_overzicht_tabel
+        self.tree_overzicht = self.overzicht_frame.tree_overzicht
 
-    def _build_klassen_analyse_ui(self):
-        """Tabblad 4: Statistieken per klas."""
-        self.tree_klassen_stat = ttk.Treeview(self.tab_klassen_analyse, columns=("Klas", "Aantal Leerlingen", "Gemiddelde Afstand (km)", "Verdeling Vervoersmiddelen"), show="headings", height=6)
-        for h in ("Klas", "Aantal Leerlingen", "Gemiddelde Afstand (km)", "Verdeling Vervoersmiddelen"):
-            self.tree_klassen_stat.heading(h, text=h)
-            if h == "Verdeling Vervoersmiddelen":
-                self.tree_klassen_stat.column(h, width=350, anchor="w")
-            else:
-                self.tree_klassen_stat.column(h, width=120, anchor="center")
-        self.tree_klassen_stat.pack(fill='x', padx=10, pady=10)
+        # Dashboard Vervoer
+        self.tree_vervoer_stat = self.vervoer_analyse_frame.tree_vervoer_stat
+        self.btn_toggle_vervoer = self.vervoer_analyse_frame.btn_toggle_vervoer
+        self.canvas_vervoer = self.vervoer_analyse_frame.canvas_vervoer
+
+        # Dashboard Afstand
+        self.lbl_gem_afstand_totaal = self.afstand_analyse_frame.lbl_gem_afstand_totaal
+        self.tree_afstand_stat = self.afstand_analyse_frame.tree_afstand_stat
+        self.btn_toggle_afstand = self.afstand_analyse_frame.btn_toggle_afstand
+        self.canvas_afstand = self.afstand_analyse_frame.canvas_afstand
+
+        # Dashboard Klassen
+        self.tree_klassen_stat = self.klassen_analyse_frame.tree_klassen_stat
+        self.btn_toggle_klassen = self.klassen_analyse_frame.btn_toggle_klassen
+        self.canvas_klassen = self.klassen_analyse_frame.canvas_klassen
+
+        # Dashboard Afstandscategorieën
+        self.tree_categorie_stat = self.categorie_analyse_frame.tree_categorie_stat
+        self.btn_toggle_categorie = self.categorie_analyse_frame.btn_toggle_categorie
+        self.canvas_categorie = self.categorie_analyse_frame.canvas_categorie
+
+        # CO2 Analyse Filters
+        self.combo_filter_klas = self.co2_analyse_frame.combo_filter_klas
+        self.combo_filter_vervoer = self.co2_analyse_frame.combo_filter_vervoer
+        self.combo_filter_afstand = self.co2_analyse_frame.combo_filter_afstand
+        self.tree_co2_stat = self.co2_analyse_frame.tree_co2_stat
+        self.btn_toggle_co2 = self.co2_analyse_frame.btn_toggle_co2
+        self.canvas_co2 = self.co2_analyse_frame.canvas_co2
+
+
+    # ==========================================
+    # CRISP FLAT DRAWINGS (BRIDGED TO CHARTS MODULE)
+    # ==========================================
+    def update_grafiek(self, chart_id, data=None, titel=None):
+        """Update de opgeslagen data of forceert een hertweergave op basis van het huidige geselecteerde type."""
+        if data is not None:
+            self.chart_states[chart_id]['data'] = data
+        if titel is not None:
+            self.chart_states[chart_id]['titel'] = titel
+            
+        state = self.chart_states[chart_id]
+        canvas = getattr(self, f"canvas_{chart_id}")
+        btn = getattr(self, f"btn_toggle_{chart_id}")
         
-        self.canvas_klassen = tk.Canvas(self.tab_klassen_analyse, bg='white', height=230)
-        self.canvas_klassen.pack(fill='both', expand=True, padx=10, pady=5)
+        # Roep de gedeelde module charts.py aan om de visualisatie op te bouwen
+        if state['type'] == 'pie':
+            charts.teken_cirkeldiagram(canvas, state['data'], state['titel'])
+            btn.config(text=" Wissel naar Staafdiagram ")
+        else:
+            charts.teken_grafiek(canvas, state['data'], state['titel'])
+            btn.config(text=" Wissel naar Cirkeldiagram ")
+
+    def toggle_grafiek(self, chart_id):
+        """Flipt de state tussen staaf- en cirkeldiagram en roept update_grafiek aan."""
+        current_type = self.chart_states[chart_id]['type']
+        self.chart_states[chart_id]['type'] = 'bar' if current_type == 'pie' else 'pie'
+        self.update_grafiek(chart_id)
+
+
+    # ==========================================
+    # DATA HELPER BINDS & ORCHESTRATION METHODS
+    # ==========================================
+    def set_controller(self, controller): 
+        self.controller = controller
+
+    def show_error(self, message): 
+        messagebox.showerror("Fout", message)
+
+    def show_info(self, message): 
+        messagebox.showinfo("Info", message)
+
+    def get_student_form_data(self): 
+        return {
+            "naam": self.entry_naam.get().strip(), 
+            "klas": self.entry_klas.get().strip(), 
+            "afstand": self.entry_afstand.get().strip()
+        }
+
+    def clear_student_form(self): 
+        for e in (self.entry_naam, self.entry_klas, self.entry_afstand):
+            e.delete(0, tk.END)
+
+    def _on_select_student(self, event):
+        selected = self.tree_students.selection()
+        if selected:
+            v = self.tree_students.item(selected[0])['values']
+            self.clear_student_form()
+            self.entry_naam.insert(0, v[1])
+            self.entry_klas.insert(0, v[2])
+            self.entry_afstand.insert(0, str(v[3]))
+
+    def populate_tree(self, tree, data):
+        for item in tree.get_children(): 
+            tree.delete(item)
+        for row in data: 
+            tree.insert("", tk.END, values=row)
+
+    def get_selected_id(self, tree):
+        selected = tree.selection()
+        return tree.item(selected[0])['values'][0] if selected else None
 
     def setup_overzicht_tree(self, headers, data):
-        """Stelt de kolommen van de ruwe tabelweergave dynamisch in."""
         self.tree_overzicht["columns"] = headers
         self.tree_overzicht["show"] = "headings"
         for h in headers:
@@ -204,125 +273,7 @@ class MainView(tk.Tk):
         self.populate_tree(self.tree_overzicht, data)
 
     def teken_grafiek(self, canvas, data_dict, titel):
-        """Universele pure-Python grafiek-tekenfunctie met Tkinter Canvas."""
-        canvas.delete("all")
-        if not data_dict:
-            return
-        
-        c_width = int(canvas.winfo_width()) if canvas.winfo_width() > 1 else int(canvas['width'])
-        c_height = int(canvas.winfo_height()) if canvas.winfo_height() > 1 else int(canvas['height'])
-        
-        margin_left, margin_bottom, margin_top, margin_right = 60, 40, 40, 30
-        graph_width = c_width - margin_left - margin_right
-        graph_height = c_height - margin_top - margin_bottom
-        
-        # Titel & Assen
-        canvas.create_text(c_width / 2, 20, text=titel, font=("Arial", 11, "bold"), fill="black")
-        canvas.create_line(margin_left, c_height - margin_bottom, c_width - margin_right, c_height - margin_bottom, width=2, fill="black")
-        canvas.create_line(margin_left, margin_top, margin_left, c_height - margin_bottom, width=2, fill="black")
-        
-        max_val = max(data_dict.values()) if max(data_dict.values()) > 0 else 1
-        num_items = len(data_dict)
-        bar_width = (graph_width / num_items) * 0.6
-        spacing = (graph_width / num_items) * 0.4
-        
-        for i, (key, value) in enumerate(data_dict.items()):
-            x_start = margin_left + (i * (graph_width / num_items)) + (spacing / 2)
-            x_end = x_start + bar_width
-            
-            bar_h = (value / max_val) * graph_height
-            y_start = c_height - margin_bottom - bar_h
-            y_end = c_height - margin_bottom
-            
-            # Teken staaf en labels
-            canvas.create_rectangle(x_start, y_start, x_end, y_end, fill="#4a90e2", outline="#2a60a2")
-            canvas.create_text((x_start + x_end) / 2, y_start - 10, text=f"{value}", font=("Arial", 9, "bold"), fill="black")
-            canvas.create_text((x_start + x_end) / 2, y_end + 15, text=str(key), font=("Arial", 9), fill="black")
+        charts.teken_grafiek(canvas, data_dict, titel)
 
-    # --- Helpers voor de Controller (Onveranderd) ---
-    def set_controller(self, controller):
-        self.controller = controller
-
-    def show_error(self, message):
-        messagebox.showerror("Fout", message)
-
-    def show_info(self, message):
-        messagebox.showinfo("Info", message)
-
-    def get_student_form_data(self): 
-        return {"naam": self.entry_naam.get(), "klas": self.entry_klas.get(), "afstand": self.entry_afstand.get()}
-    
-    def clear_student_form(self): 
-        [e.delete(0, tk.END) for e in (self.entry_naam, self.entry_klas, self.entry_afstand)]
-        
-    def _on_select_student(self, event):
-        selected = self.tree_students.selection()
-        if selected:
-            v = self.tree_students.item(selected[0])['values']
-            self.clear_student_form()
-            self.entry_naam.insert(0, v[1]); self.entry_klas.insert(0, v[2]); self.entry_afstand.insert(0, v[3])
-
-    def populate_tree(self, tree, data):
-        for item in tree.get_children(): tree.delete(item)
-        for row in data: tree.insert("", tk.END, values=row)
-
-    def get_selected_id(self, tree):
-        selected = tree.selection()
-        return tree.item(selected[0])['values'][0] if selected else None
-    
-    # VOEG DIT TOE IN JE `MainView` KLASSE ONDERAAN DE `_build_dashboard_tab` FUNCTIE:
-
-    def _build_dashboard_tab(self):
-        self.dashboard_notebook = ttk.Notebook(self.tab_dashboard)
-        self.dashboard_notebook.pack(expand=True, fill='both', padx=5, pady=5)
-
-        self.tab_overzicht = ttk.Frame(self.dashboard_notebook)
-        self.tab_vervoer_analyse = ttk.Frame(self.dashboard_notebook)
-        self.tab_afstand_analyse = ttk.Frame(self.dashboard_notebook)
-        self.tab_klassen_analyse = ttk.Frame(self.dashboard_notebook)
-        self.tab_co2_analyse = ttk.Frame(self.dashboard_notebook) # NIEUW: CO2 Tab
-
-        self.dashboard_notebook.add(self.tab_overzicht, text='Overzicht Data')
-        self.dashboard_notebook.add(self.tab_vervoer_analyse, text='Vervoersmiddelen Analyse')
-        self.dashboard_notebook.add(self.tab_afstand_analyse, text='Afstand Analyse')
-        self.dashboard_notebook.add(self.tab_klassen_analyse, text='Klassenanalyse')
-        self.dashboard_notebook.add(self.tab_co2_analyse, text='CO₂ Analyse (Uitbreiding)') # NIEUW
-
-        self._build_overzicht_ui()
-        self._build_vervoer_analyse_ui()
-        self._build_afstand_analyse_ui()
-        self._build_klassen_analyse_ui()
-        self._build_co2_analyse_ui() # NIEUW
-
-    # NIEUWE FUNCTIE VOOR JE GUI.PY:
-    def _build_co2_analyse_ui(self):
-        """Uitbreiding 1: CO2 Analyse met filters"""
-        # Filter sectie
-        filter_frame = ttk.LabelFrame(self.tab_co2_analyse, text="Filters")
-        filter_frame.pack(fill='x', padx=10, pady=5)
-
-        ttk.Label(filter_frame, text="Klas:").grid(row=0, column=0, padx=5, pady=5)
-        self.combo_filter_klas = ttk.Combobox(filter_frame, state="readonly", width=10)
-        self.combo_filter_klas.grid(row=0, column=1, padx=5, pady=5)
-
-        ttk.Label(filter_frame, text="Vervoer:").grid(row=0, column=2, padx=5, pady=5)
-        self.combo_filter_vervoer = ttk.Combobox(filter_frame, state="readonly", width=10)
-        self.combo_filter_vervoer.grid(row=0, column=3, padx=5, pady=5)
-
-        ttk.Label(filter_frame, text="Afstand:").grid(row=0, column=4, padx=5, pady=5)
-        self.combo_filter_afstand = ttk.Combobox(filter_frame, values=["Alle", "Kort (0-5 km)", "Middel (5.1-10 km)", "Lang (>10 km)"], state="readonly", width=15)
-        self.combo_filter_afstand.set("Alle")
-        self.combo_filter_afstand.grid(row=0, column=5, padx=5, pady=5)
-
-        ttk.Button(filter_frame, text="Pas Filters Toe", command=lambda: self.controller.update_co2_analyse()).grid(row=0, column=6, padx=10, pady=5)
-
-        # Tabel sectie
-        self.tree_co2_stat = ttk.Treeview(self.tab_co2_analyse, columns=("Vervoersmiddel", "Aantal Ritten", "Totale CO2 (gram)"), show="headings", height=4)
-        for h in ("Vervoersmiddel", "Aantal Ritten", "Totale CO2 (gram)"):
-            self.tree_co2_stat.heading(h, text=h)
-            self.tree_co2_stat.column(h, anchor="center")
-        self.tree_co2_stat.pack(fill='x', padx=10, pady=10)
-
-        # Grafiek sectie
-        self.canvas_co2 = tk.Canvas(self.tab_co2_analyse, bg='white', height=250)
-        self.canvas_co2.pack(fill='both', expand=True, padx=10, pady=5)
+    def teken_cirkeldiagram(self, canvas, data_dict, titel):
+        charts.teken_cirkeldiagram(canvas, data_dict, titel)

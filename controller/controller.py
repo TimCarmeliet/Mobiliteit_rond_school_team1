@@ -7,7 +7,7 @@ class Controller:
 
     def refresh_all_tables(self):
         """Haalt alle data op en vult de schermen, dropdowns, dashboards én CO2 tabblad."""
-        # 1. Zorg dat de CO2 tabel bestaat (Uitbreiding)
+        # 1. Zorg dat de CO2 tabel bestaat
         self.model.setup_co2_uitbreiding()
 
         # 2. Haal alle data op uit de database
@@ -28,9 +28,8 @@ class Controller:
         self.update_dashboard_analyses(studenten, transports, logs)
 
         # 6. --- UITBREIDING 1: CO2 ---
-        # Vul de dropdown filters voor de CO2 tab
-        klassen = list(set([s[2] for s in studenten]))
-        vervoersmiddelen = [t[1] for t in transports]
+        klassen = list(set([str(s[2]).strip() for s in studenten]))
+        vervoersmiddelen = [str(t[1]).strip() for t in transports]
         
         self.view.combo_filter_klas['values'] = ["Alle"] + klassen
         if not self.view.combo_filter_klas.get(): 
@@ -40,7 +39,6 @@ class Controller:
         if not self.view.combo_filter_vervoer.get(): 
             self.view.combo_filter_vervoer.set("Alle")
             
-        # Update direct de CO2 grafiek en tabel
         self.update_co2_analyse()
 
     def laad_overzicht_tabel(self):
@@ -61,8 +59,8 @@ class Controller:
 
     def update_dashboard_analyses(self, studenten, transports, logs):
         """Berekent alle statistieken met Python-logica (ZONDER SQL JOINs)."""
-        stud_dict = {s[0]: {"naam": s[1], "klas": s[2], "afstand": s[3]} for s in studenten}
-        trans_dict = {t[0]: t[1] for t in transports}
+        stud_dict = {s[0]: {"naam": s[1], "klas": str(s[2]).strip(), "afstand": float(s[3])} for s in studenten}
+        trans_dict = {t[0]: str(t[1]).strip() for t in transports}
         
         self.laad_overzicht_tabel()
         
@@ -82,7 +80,8 @@ class Controller:
             vervoer_grafiek_data[t_type] = count
             
         self.view.populate_tree(self.view.tree_vervoer_stat, vervoer_rows)
-        self.view.teken_grafiek(self.view.canvas_vervoer, vervoer_grafiek_data, "Aantal verplaatsingen per type")
+        # Nieuwe universele aanroep:
+        self.view.update_grafiek('vervoer', vervoer_grafiek_data, "Procentuele Verdeling per Vervoersmiddel")
 
         # 3. Afstand Analyse
         totale_afstand_all = sum(s[3] for s in studenten)
@@ -106,12 +105,12 @@ class Controller:
             afstand_grafiek_data[t_type] = gem_km
             
         self.view.populate_tree(self.view.tree_afstand_stat, afstand_rows)
-        self.view.teken_grafiek(self.view.canvas_afstand, afstand_grafiek_data, "Gemiddelde afstand per vervoersmiddel (km)")
+        self.view.update_grafiek('afstand', afstand_grafiek_data, "Gemiddelde afstand per vervoersmiddel (km)")
 
         # 4. Klassenanalyse
         klas_studenten = {}
         for s in studenten:
-            klas = s[2]
+            klas = str(s[2]).strip()
             if klas not in klas_studenten:
                 klas_studenten[klas] = []
             klas_studenten[klas].append(s)
@@ -141,23 +140,59 @@ class Controller:
             klassen_grafiek_data[klas] = gem_afst_klas
             
         self.view.populate_tree(self.view.tree_klassen_stat, klassen_rows)
-        self.view.teken_grafiek(self.view.canvas_klassen, klassen_grafiek_data, "Gemiddelde afstand per klas (km)")
+        self.view.update_grafiek('klassen', klassen_grafiek_data, "Gemiddelde afstand per klas (km)")
+
+        # 5. EXTRA EIGEN ANALYSE: Vervoerskeuze per Afstandscategorie
+        categorieen = {"Kort (0-5 km)": {}, "Middel (5.1-10 km)": {}, "Lang (>10 km)": {}}
+        for log in logs:
+            s_id = log[1]
+            t_type = trans_dict.get(log[2])
+            if s_id in stud_dict:
+                afst = stud_dict[s_id]["afstand"]
+                if afst <= 5.0:
+                    cat = "Kort (0-5 km)"
+                elif afst <= 10.0:
+                    cat = "Middel (5.1-10 km)"
+                else:
+                    cat = "Lang (>10 km)"
+                
+                if t_type not in categorieen[cat]:
+                    categorieen[cat][t_type] = 0
+                categorieen[cat][t_type] += 1
+                
+        cat_rows = []
+        cat_grafiek_data = {} 
+        for cat, v_counts in categorieen.items():
+            totaal_ritten = sum(v_counts.values())
+            if totaal_ritten > 0:
+                populair = max(v_counts, key=v_counts.get)
+                verdeling = ", ".join([f"{k}: {v}" for k, v in v_counts.items() if v > 0])
+            else:
+                populair = "-"
+                verdeling = "Geen ritten"
+            
+            cat_rows.append((cat, totaal_ritten, populair, verdeling))
+            cat_grafiek_data[cat] = totaal_ritten
+            
+        self.view.populate_tree(self.view.tree_categorie_stat, cat_rows)
+        self.view.update_grafiek('categorie', cat_grafiek_data, "Totaal aantal ritten per afstandscategorie")
 
     # --- Uitbreiding 1: CO2 Analyse ---
     def update_co2_analyse(self):
-        """Uitbreiding 1: Berekent de CO2 uitstoot met toepassing van filters."""
+        """Uitbreiding 1: Berekent de CO2 uitstoot met kogelvrije filters en fallbacks."""
         studenten = self.model.get_all_students()
         transports = self.model.get_all_transports()
         logs = self.model.get_all_logs()
-        co2_normen = dict(self.model.get_co2_normen()) 
+        
+        db_normen = dict(self.model.get_co2_normen())
+        fallback_normen = {'fiets': 0.0, 'bus': 50.0, 'auto': 120.0, 'te voet': 0.0}
 
-        # Haal actieve filters op
-        f_klas = self.view.combo_filter_klas.get()
-        f_vervoer = self.view.combo_filter_vervoer.get()
-        f_afstand = self.view.combo_filter_afstand.get()
+        f_klas = self.view.combo_filter_klas.get().strip()
+        f_vervoer = self.view.combo_filter_vervoer.get().strip()
+        f_afstand = self.view.combo_filter_afstand.get().strip()
 
-        stud_dict = {s[0]: {"klas": s[2], "afstand": s[3]} for s in studenten}
-        trans_dict = {t[0]: t[1] for t in transports}
+        stud_dict = {s[0]: {"klas": str(s[2]).strip(), "afstand": float(s[3])} for s in studenten}
+        trans_dict = {t[0]: str(t[1]).strip() for t in transports}
 
         co2_per_vervoer = {t_type: {"ritten": 0, "co2": 0.0} for t_type in trans_dict.values()}
 
@@ -170,21 +205,24 @@ class Controller:
                 afstand = stud_dict[s_id]["afstand"]
                 t_type = trans_dict[t_id]
 
-                # --- 1. Toepassen van Filters ---
                 if f_klas != "Alle" and klas != f_klas:
                     continue
                 if f_vervoer != "Alle" and t_type != f_vervoer:
                     continue
                 if f_afstand != "Alle":
-                    if f_afstand == "Kort (0-5 km)" and afstand > 5:
+                    if f_afstand == "Kort (0-5 km)" and afstand > 5.0:
                         continue
-                    elif f_afstand == "Middel (5.1-10 km)" and (afstand <= 5 or afstand > 10):
+                    elif f_afstand == "Middel (5.1-10 km)" and (afstand <= 5.0 or afstand > 10.0):
                         continue
-                    elif f_afstand == "Lang (>10 km)" and afstand <= 10:
+                    elif f_afstand == "Lang (>10 km)" and afstand <= 10.0:
                         continue
 
-                # --- 2. Berekening ---
-                uitstoot_per_km = co2_normen.get(t_type.lower(), 0.0) 
+                zoek_naam = t_type.lower()
+                if zoek_naam in db_normen:
+                    uitstoot_per_km = db_normen[zoek_naam]
+                else:
+                    uitstoot_per_km = fallback_normen.get(zoek_naam, 0.0)
+                
                 totale_co2_rit = afstand * uitstoot_per_km
 
                 co2_per_vervoer[t_type]["ritten"] += 1
@@ -200,9 +238,9 @@ class Controller:
             co2_grafiek_data[t_type] = co2
 
         self.view.populate_tree(self.view.tree_co2_stat, co2_rows)
-        self.view.teken_grafiek(self.view.canvas_co2, co2_grafiek_data, "Totale CO₂ Uitstoot (Gram) o.b.v. Filters")
+        self.view.update_grafiek('co2', co2_grafiek_data, "Totale CO₂ Uitstoot (Gram) o.b.v. Filters")
 
-    # --- Studenten CRUD Acties ---
+    # --- CRUD Acties ---
     def add_student(self):
         data = self.view.get_student_form_data()
         if not all(data.values()): return self.view.show_error("Vul alles in!")
@@ -233,7 +271,6 @@ class Controller:
         self.refresh_all_tables()
         self.view.show_info("Student en bijbehorende logs verwijderd.")
 
-    # --- Vervoer CRUD Acties ---
     def add_transport(self):
         type_vervoer = self.view.entry_vervoer_type.get()
         if not type_vervoer: return self.view.show_error("Vul een type in.")
@@ -249,7 +286,6 @@ class Controller:
         self.refresh_all_tables()
         self.view.show_info("Vervoer en bijbehorende logs verwijderd.")
 
-    # --- Logs CRUD Acties ---
     def add_log(self):
         student_val = self.view.combo_student.get()
         vervoer_val = self.view.combo_vervoer.get()

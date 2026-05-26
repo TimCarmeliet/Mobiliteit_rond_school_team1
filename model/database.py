@@ -28,7 +28,7 @@ class DatabaseModel:
                                 transport_type TEXT UNIQUE,
                                 co2_per_km REAL)''')
             
-            # Voeg de standaard uitstoot toe (gebruik REPLACE of IGNORE om dubbele data te voorkomen)
+            # Voeg de standaard uitstoot toe (gebruik IGNORE om dubbele data te voorkomen als het al bestaat)
             standaard_normen = [("fiets", 0), ("bus", 50), ("auto", 120), ("te voet", 0)]
             for norm in standaard_normen:
                 cursor.execute("INSERT OR IGNORE INTO CO2_Normen (transport_type, co2_per_km) VALUES (?, ?)", norm)
@@ -86,4 +86,3 @@ class DatabaseModel:
     def delete_log(self, log_id):
         with self._get_cursor(commit=True) as cursor:
             cursor.execute("DELETE FROM Mobility_log WHERE id = ?", (log_id,))
-        
