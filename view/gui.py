@@ -26,71 +26,48 @@ class MainView(tk.Tk):
             'gezondheid': {'type': 'pie', 'data': {}, 'titel': ""}
         }
 
-        # 1. Clean, High-Contrast Light Styling Configuration
-        style = ttk.Style(self)
-        style.theme_use('clam')
+        # Thema definities (Dark & Light tokens)
+        self.themes = {
+            'light': {
+                'bg': "#f4f5f8",          # Crisp light grey
+                'card_bg': "#ffffff",     # Clean white card surface
+                'text': "#2c3e50",        # Dark charcoal text
+                'text_muted': "#5a6b7c",  # Muted slate text
+                'border': "#dcdfe6",      # Light border
+                'accent': "#4a90e2",      # Steel blue accent
+                'danger': "#e74c3c",      # Red
+                'alternate_row': "#f8f9fa",
+                'chart_text': "#2c3e50",  # Dark text inside canvas
+                'chart_grid': "#e8eaed"   # Subtle grid line
+            },
+            'dark': {
+                'bg': "#0f172a",          # Deep slate-900 background
+                'card_bg': "#1e293b",     # Slate-800 card background
+                'text': "#f8fafc",        # High contrast white-slate text
+                'text_muted': "#94a3b8",  # Slate-400
+                'border': "#334155",      # Dark border
+                'accent': "#6366f1",      # Indigo accent
+                'danger': "#f87171",      # Light red
+                'alternate_row': "#1e293b",
+                'chart_text': "#f8fafc",  # Readable text inside canvas
+                'chart_grid': "#334155"   # Dark grid line
+            }
+        }
+        self.current_theme = 'light' # Standaard light mode om origineel uiterlijk te behouden
+
+        # Bouw top header bar (Voor thema knop, boven notebooks)
+        self.header_bar = tk.Frame(self, pady=10)
+        self.header_bar.pack(fill='x', padx=10)
         
-        bg_window = "#f4f5f8"      # Light grey background
-        bg_card = "#ffffff"        # Pure white background
-        fg_text = "#2c3e50"        # High contrast charcoal text
-        fg_muted = "#5a6b7c"       # Muted slate text
-        border_color = "#dcdfe6"   # Clean borders
-        accent_color = "#4a90e2"   # Professional blue
-        danger_color = "#e74c3c"   # Clean red for delete
-        alternate_row = "#f8f9fa"  # Alternate list rows
+        self.app_title_lbl = tk.Label(self.header_bar, text="🎒 Mobiliteit rond de School", font=('Arial', 14, 'bold'))
+        self.app_title_lbl.pack(side='left', padx=10)
 
-        # Algemene stijl instellingen
-        style.configure('.', background=bg_window, foreground=fg_text, font=('Arial', 10))
-        style.configure('TFrame', background=bg_window)
-        style.configure('TLabel', background=bg_window, foreground=fg_text, font=('Arial', 10))
-        
-        # Hoofd Notebook styling
-        style.configure('TNotebook', background=bg_window, borderwidth=1, bordercolor=border_color)
-        style.configure('TNotebook.Tab', background="#e4e7ed", foreground=fg_text, font=('Arial', 10, 'bold'), padding=(15, 6))
-        style.map('TNotebook.Tab',
-            background=[('selected', bg_card)],
-            foreground=[('selected', accent_color)]
-        )
+        self.btn_toggle_theme = ttk.Button(self.header_bar, text="🌓 Wissel Kleurenthema", command=self.toggle_theme)
+        self.btn_toggle_theme.pack(side='right', padx=10)
 
-        # Buttons (Clean flat with clear contrast)
-        style.configure('TButton', font=('Arial', 10, 'bold'), borderwidth=1, bordercolor=border_color, padding=5)
-        style.map('TButton',
-            background=[('active', '#e4e7ed'), ('!disabled', '#ffffff')],
-            foreground=[('active', accent_color), ('!disabled', fg_text)]
-        )
-        style.configure('Danger.TButton', font=('Arial', 10, 'bold'), borderwidth=1, bordercolor=border_color, padding=5)
-        style.map('Danger.TButton',
-            background=[('active', '#fde8e8'), ('!disabled', '#ffffff')],
-            foreground=[('active', danger_color), ('!disabled', danger_color)]
-        )
-
-        # Form Inputs & Comboboxes (Perfect contrast, no white-on-white)
-        style.configure('TEntry', fieldbackground="#ffffff", foreground=fg_text, bordercolor=border_color, insertcolor=fg_text, relief='flat')
-        style.configure('TCombobox', fieldbackground="#ffffff", background="#ffffff", foreground=fg_text, bordercolor=border_color, arrowcolor=fg_muted)
-        style.map('TCombobox', 
-            fieldbackground=[('readonly', '#ffffff')], 
-            background=[('readonly', '#ffffff')], 
-            foreground=[('readonly', fg_text)]
-        )
-
-        # LabelFrame
-        style.configure('TLabelframe', font=('Arial', 10, 'bold'), bordercolor=border_color, borderwidth=1, background=bg_window)
-        style.configure('TLabelframe.Label', font=('Arial', 10, 'bold'), background=bg_window, foreground=fg_text)
-
-        # Treeview (Neat high contrast tables)
-        style.configure('Treeview', font=('Arial', 10), rowheight=26, background=bg_card, fieldbackground=bg_card, foreground=fg_text, bordercolor=border_color, borderwidth=1)
-        style.configure('Treeview.Heading', font=('Arial', 10, 'bold'), background="#e4e7ed", foreground=fg_text, relief='flat', borderwidth=0)
-        style.map('Treeview', 
-            background=[('selected', accent_color)], 
-            foreground=[('selected', '#ffffff')],
-            alternatebackground=[('!selected', alternate_row)]
-        )
-
-        self.config(bg=bg_window)
-
-        # 2. Hoofd Notebook (Original Structure)
+        # Hoofd Notebook (Original Structure)
         self.notebook = ttk.Notebook(self)
-        self.notebook.pack(expand=True, fill='both', padx=10, pady=10)
+        self.notebook.pack(expand=True, fill='both', padx=10, pady=(5, 10))
         
         self.tab_beheer = ttk.Frame(self.notebook)
         self.tab_dashboard = ttk.Frame(self.notebook)
@@ -98,12 +75,93 @@ class MainView(tk.Tk):
         self.notebook.add(self.tab_beheer, text='Data Beheer (CRUD)')
         self.notebook.add(self.tab_dashboard, text='Dashboard & Analyses')
         
-        # 3. Bouw de gedecoupleerde sub-componenten
+        # Bouw de gedecoupleerde sub-componenten
         self._build_beheer_tab()
         self._build_dashboard_tab()
 
-        # 4. Map alle sub-widget eigenschappen naar MainView (Voor perfecte Controller backwards compatibility!)
+        # Map alle sub-widget eigenschappen naar MainView (Voor perfecte Controller backwards compatibility!)
         self._map_sub_properties()
+
+        # Activeer themastyling
+        self.apply_theme()
+
+    def active_theme(self):
+        return self.themes[self.current_theme]
+
+    def toggle_theme(self):
+        self.current_theme = 'light' if self.current_theme == 'dark' else 'dark'
+        self.apply_theme()
+
+    def apply_theme(self):
+        theme = self.active_theme()
+        bg = theme['bg']
+        card_bg = theme['card_bg']
+        text = theme['text']
+        text_muted = theme['text_muted']
+        border = theme['border']
+        accent = theme['accent']
+        danger = theme['danger']
+        alternate = theme['alternate_row']
+        
+        # Configureer TTK Style
+        style = ttk.Style(self)
+        style.theme_use('clam')
+        
+        # Algemene configuraties
+        style.configure('.', background=bg, foreground=text, font=('Arial', 10))
+        style.configure('TFrame', background=bg)
+        style.configure('TLabel', background=bg, foreground=text)
+        style.configure('TLabelframe', font=('Arial', 10, 'bold'), bordercolor=border, borderwidth=1, background=bg)
+        style.configure('TLabelframe.Label', font=('Arial', 10, 'bold'), background=bg, foreground=text)
+        
+        # Notebook styling
+        style.configure('TNotebook', background=bg, borderwidth=1, bordercolor=border)
+        style.configure('TNotebook.Tab', background="#e4e7ed" if self.current_theme == 'light' else "#0b0f19", foreground=text, font=('Arial', 10, 'bold'), padding=(15, 6))
+        style.map('TNotebook.Tab',
+            background=[('selected', card_bg)],
+            foreground=[('selected', accent)]
+        )
+
+        # Buttons (Clean flat met duidelijke contrasten in beide thema's)
+        style.configure('TButton', font=('Arial', 10, 'bold'), borderwidth=1, bordercolor=border, padding=5)
+        style.map('TButton',
+            background=[('active', '#e4e7ed' if self.current_theme == 'light' else '#334155'), ('!disabled', card_bg)],
+            foreground=[('active', accent), ('!disabled', text)]
+        )
+        style.configure('Danger.TButton', font=('Arial', 10, 'bold'), borderwidth=1, bordercolor=border, padding=5)
+        style.map('Danger.TButton',
+            background=[('active', '#fde8e8' if self.current_theme == 'light' else '#7f1d1d'), ('!disabled', card_bg)],
+            foreground=[('active', danger), ('!disabled', danger)]
+        )
+
+        # Form Inputs & Comboboxes (Perfect contrast, no white-on-white)
+        style.configure('TEntry', fieldbackground=card_bg, foreground=text, bordercolor=border, insertcolor=text, relief='flat')
+        style.configure('TCombobox', fieldbackground=card_bg, background=card_bg, foreground=text, bordercolor=border, arrowcolor=text_muted)
+        style.map('TCombobox', 
+            fieldbackground=[('readonly', card_bg)], 
+            background=[('readonly', card_bg)], 
+            foreground=[('readonly', text)]
+        )
+
+        # Treeview (Neat high contrast tables)
+        style.configure('Treeview', font=('Arial', 10), rowheight=26, background=card_bg, fieldbackground=card_bg, foreground=text, bordercolor=border, borderwidth=1)
+        style.configure('Treeview.Heading', font=('Arial', 10, 'bold'), background="#e4e7ed" if self.current_theme == 'light' else "#0b0f19", foreground=text, relief='flat', borderwidth=0)
+        style.map('Treeview', 
+            background=[('selected', accent)], 
+            foreground=[('selected', '#ffffff')],
+            alternatebackground=[('!selected', alternate)]
+        )
+
+        # Configureer Tkinter basis componenten
+        self.config(bg=bg)
+        self.header_bar.config(bg=bg)
+        self.app_title_lbl.config(bg=bg, fg=accent)
+
+        # Configureer alle canvases en dwing een grafiek repaint af in de nieuwe themakleuren
+        for chart_id in self.chart_states:
+            canvas = getattr(self, f"canvas_{chart_id}")
+            canvas.config(bg=card_bg, highlightbackground=border)
+            self.update_grafiek(chart_id)
 
     # ==========================================
     # SUB-COMPONENT FRAME BUILDERS
@@ -221,12 +279,14 @@ class MainView(tk.Tk):
         else:
             chart_data = state['data']
             
+        theme = self.active_theme()
+        
         # Roep de gedeelde module charts.py aan om de visualisatie op te bouwen
         if state['type'] == 'pie':
-            charts.teken_cirkeldiagram(canvas, chart_data, state['titel'])
+            charts.teken_cirkeldiagram(canvas, chart_data, state['titel'], theme)
             btn.config(text=" Wissel naar Staafdiagram ")
         else:
-            charts.teken_grafiek(canvas, chart_data, state['titel'])
+            charts.teken_grafiek(canvas, chart_data, state['titel'], theme)
             btn.config(text=" Wissel naar Cirkeldiagram ")
 
     def toggle_grafiek(self, chart_id):
@@ -287,7 +347,7 @@ class MainView(tk.Tk):
         self.populate_tree(self.tree_overzicht, data)
 
     def teken_grafiek(self, canvas, data_dict, titel):
-        charts.teken_grafiek(canvas, data_dict, titel)
+        charts.teken_grafiek(canvas, data_dict, titel, self.active_theme())
 
     def teken_cirkeldiagram(self, canvas, data_dict, titel):
-        charts.teken_cirkeldiagram(canvas, data_dict, titel)
+        charts.teken_cirkeldiagram(canvas, data_dict, titel, self.active_theme())
