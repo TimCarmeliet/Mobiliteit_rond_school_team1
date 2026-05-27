@@ -9,6 +9,114 @@ from view.dashboard_frames import (
 )
 import view.charts as charts
 
+# ==========================================
+# NIEUWE SUB-FRAMES VOOR AANWEZIGHEDEN (In dezelfde stijl)
+# ==========================================
+class AanwezighedenBeheerFrame(ttk.Frame):
+    def __init__(self, parent, main_view):
+        super().__init__(parent)
+        self.main_view = main_view
+        
+        # Splitter Layout (Links invoer, Rechts de tabel)
+        main_splitter = ttk.PanedWindow(self, orient='horizontal')
+        main_splitter.pack(expand=True, fill='both', padx=5, pady=5)
+        
+        # Linker paneel: Formulier
+        left_frame = ttk.Frame(main_splitter)
+        main_splitter.add(left_frame, weight=1)
+        
+        form_frame = ttk.LabelFrame(left_frame, text=" Aanwezigheid Registreren ", padding=15)
+        form_frame.pack(fill='x', padx=10, pady=10)
+        
+        ttk.Label(form_frame, text="Selecteer Student:").pack(anchor='w', pady=(0, 2))
+        self.combo_student = ttk.Combobox(form_frame, state="readonly")
+        self.combo_student.pack(fill='x', pady=(0, 10))
+        
+        ttk.Label(form_frame, text="Datum (JJJJ-MM-DD):").pack(anchor='w', pady=(0, 2))
+        self.entry_datum = ttk.Entry(form_frame)
+        self.entry_datum.pack(fill='x', pady=(0, 10))
+        
+        ttk.Label(form_frame, text="Status:").pack(anchor='w', pady=(0, 2))
+        self.combo_status = ttk.Combobox(form_frame, values=["Aanwezig", "Afwezig", "Te laat"], state="readonly")
+        self.combo_status.set("Aanwezig")
+        self.combo_status.pack(fill='x', pady=(0, 15))
+        
+        # Actieknoppen
+        btn_add = ttk.Button(form_frame, text=" Opslaan ", command=lambda: self.main_view.controller.add_aanwezigheid())
+        btn_add.pack(fill='x', pady=5)
+        
+        btn_del = ttk.Button(form_frame, text=" Selectie Verwijderen ", style='Danger.TButton', command=lambda: self.main_view.controller.delete_aanwezigheid())
+        btn_del.pack(fill='x', pady=5)
+        
+        # Rechter paneel: Overzichtstabel
+        right_frame = ttk.Frame(main_splitter)
+        main_splitter.add(right_frame, weight=3)
+        
+        table_frame = ttk.LabelFrame(right_frame, text=" Historie Aanwezigheidsregistraties ", padding=10)
+        table_frame.pack(expand=True, fill='both', padx=10, pady=10)
+        
+        headers = ("ID", "Student (ID & Naam)", "Datum", "Status")
+        self.tree_aanw = ttk.Treeview(table_frame, columns=headers, show="headings")
+        
+        for h in headers:
+            self.tree_aanw.heading(h, text=h)
+            self.tree_aanw.column(h, anchor="center", width=120)
+            
+        scroll = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree_aanw.yview)
+        self.tree_aanw.configure(yscrollcommand=scroll.set)
+        
+        self.tree_aanw.pack(side='left', expand=True, fill='both')
+        scroll.pack(side='right', fill='y')
+
+
+class AanwezigheidsAnalyseFrame(ttk.Frame):
+    def __init__(self, parent, main_view):
+        super().__init__(parent)
+        self.main_view = main_view
+        
+        # Bovenste gedeelte: Filter / Type Analyse selectie
+        top_frame = ttk.LabelFrame(self, text=" Kies Analyse-invalshoek ", padding=10)
+        top_frame.pack(fill='x', padx=10, pady=10)
+        
+        ttk.Label(top_frame, text="Selecteer statistiek: ").pack(side='left', padx=5)
+        self.combo_analyse = ttk.Combobox(top_frame, values=[
+            "Aantal afwezigheden per klas", 
+            "Percentage aanwezig per klas", 
+            "Vervoersmiddel vs Aanwezigheid"
+        ], state="readonly", width=35)
+        self.combo_analyse.set("Aantal afwezigheden per klas")
+        self.combo_analyse.pack(side='left', padx=5)
+        
+        btn_update = ttk.Button(top_frame, text=" Berekenen & Tonen ", command=lambda: self.main_view.controller.update_aanwezigheid_analyse())
+        top_frame.bind("<Visibility>", lambda e: self.main_view.controller.update_aanwezigheid_analyse())
+        self.combo_analyse.bind("<<ComboboxSelected>>", lambda e: self.main_view.controller.update_aanwezigheid_analyse())
+        btn_update.pack(side='left', padx=10)
+        
+        # Onderste gedeelte split: Links tabel, Rechts grafiek
+        data_splitter = ttk.PanedWindow(self, orient='horizontal')
+        data_splitter.pack(expand=True, fill='both', padx=5, pady=5)
+        
+        # Links: De data tabel
+        tabel_wrapper = ttk.LabelFrame(data_splitter, text=" Analytische Uitkomst ", padding=10)
+        data_splitter.add(tabel_wrapper, weight=1)
+        
+        self.tree_aanw_analyse = ttk.Treeview(tabel_wrapper, show="headings")
+        self.tree_aanw_analyse.pack(expand=True, fill='both')
+        
+        # Rechts: De Grafiek + Wisselknop
+        grafiek_wrapper = ttk.LabelFrame(data_splitter, text=" Visuele Weergave ", padding=10)
+        data_splitter.add(grafiek_wrapper, weight=1)
+        
+        self.btn_toggle_aanwezigheid = ttk.Button(grafiek_wrapper, text=" Wissel naar Cirkeldiagram ", command=lambda: self.main_view.toggle_grafiek('aanwezigheid'))
+        self.btn_toggle_aanwezigheid.pack(anchor='ne', pady=(0, 5))
+        
+        self.canvas_aanwezigheid = tk.Canvas(grafiek_wrapper, bg="white", highlightthickness=0)
+        self.canvas_aanwezigheid.pack(expand=True, fill='both')
+
+
+# ==========================================
+# HOOFD INTERFACE (MainView)
+# ==========================================
 class MainView(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -16,28 +124,29 @@ class MainView(tk.Tk):
         self.geometry("1100x850") 
         self.controller = None
         
-        # Geheugen voor de status van de grafieken
+        # Geheugen voor de status van de grafieken (AANGEVULD MET AANWEZIGHED)
         self.chart_states = {
             'vervoer': {'type': 'pie', 'data': {}, 'titel': ""},
             'afstand': {'type': 'bar', 'data': {}, 'titel': ""},
             'klassen': {'type': 'bar', 'data': {}, 'titel': ""},
             'categorie': {'type': 'pie', 'data': {}, 'titel': ""},
             'co2': {'type': 'bar', 'data': {}, 'titel': ""},
-            'gezondheid': {'type': 'pie', 'data': {}, 'titel': ""}
+            'gezondheid': {'type': 'pie', 'data': {}, 'titel': ""},
+            'aanwezigheid': {'type': 'bar', 'data': {}, 'titel': ""} # <-- NIEUW
         }
 
         # 1. Clean, High-Contrast Light Styling Configuration
         style = ttk.Style(self)
         style.theme_use('clam')
         
-        bg_window = "#f4f5f8"      # Light grey background
-        bg_card = "#ffffff"        # Pure white background
-        fg_text = "#2c3e50"        # High contrast charcoal text
-        fg_muted = "#5a6b7c"       # Muted slate text
-        border_color = "#dcdfe6"   # Clean borders
-        accent_color = "#4a90e2"   # Professional blue
-        danger_color = "#e74c3c"   # Clean red for delete
-        alternate_row = "#f8f9fa"  # Alternate list rows
+        bg_window = "#f4f5f8"      
+        bg_card = "#ffffff"        
+        fg_text = "#2c3e50"        
+        fg_muted = "#5a6b7c"       
+        border_color = "#dcdfe6"   
+        accent_color = "#4a90e2"   
+        danger_color = "#e74c3c"   
+        alternate_row = "#f8f9fa"  
 
         # Algemene stijl instellingen
         style.configure('.', background=bg_window, foreground=fg_text, font=('Arial', 10))
@@ -52,7 +161,7 @@ class MainView(tk.Tk):
             foreground=[('selected', accent_color)]
         )
 
-        # Buttons (Clean flat with clear contrast)
+        # Buttons
         style.configure('TButton', font=('Arial', 10, 'bold'), borderwidth=1, bordercolor=border_color, padding=5)
         style.map('TButton',
             background=[('active', '#e4e7ed'), ('!disabled', '#ffffff')],
@@ -64,7 +173,7 @@ class MainView(tk.Tk):
             foreground=[('active', danger_color), ('!disabled', danger_color)]
         )
 
-        # Form Inputs & Comboboxes (Perfect contrast, no white-on-white)
+        # Form Inputs & Comboboxes
         style.configure('TEntry', fieldbackground="#ffffff", foreground=fg_text, bordercolor=border_color, insertcolor=fg_text, relief='flat')
         style.configure('TCombobox', fieldbackground="#ffffff", background="#ffffff", foreground=fg_text, bordercolor=border_color, arrowcolor=fg_muted)
         style.map('TCombobox', 
@@ -77,7 +186,7 @@ class MainView(tk.Tk):
         style.configure('TLabelframe', font=('Arial', 10, 'bold'), bordercolor=border_color, borderwidth=1, background=bg_window)
         style.configure('TLabelframe.Label', font=('Arial', 10, 'bold'), background=bg_window, foreground=fg_text)
 
-        # Treeview (Neat high contrast tables)
+        # Treeview
         style.configure('Treeview', font=('Arial', 10), rowheight=26, background=bg_card, fieldbackground=bg_card, foreground=fg_text, bordercolor=border_color, borderwidth=1)
         style.configure('Treeview.Heading', font=('Arial', 10, 'bold'), background="#e4e7ed", foreground=fg_text, relief='flat', borderwidth=0)
         style.map('Treeview', 
@@ -88,7 +197,7 @@ class MainView(tk.Tk):
 
         self.config(bg=bg_window)
 
-        # 2. Hoofd Notebook (Original Structure)
+        # 2. Hoofd Notebook
         self.notebook = ttk.Notebook(self)
         self.notebook.pack(expand=True, fill='both', padx=10, pady=10)
         
@@ -98,11 +207,11 @@ class MainView(tk.Tk):
         self.notebook.add(self.tab_beheer, text='Data Beheer (CRUD)')
         self.notebook.add(self.tab_dashboard, text='Dashboard & Analyses')
         
-        # 3. Bouw de gedecoupleerde sub-componenten
+        # 3. Bouw de sub-componenten
         self._build_beheer_tab()
         self._build_dashboard_tab()
 
-        # 4. Map alle sub-widget eigenschappen naar MainView (Voor perfecte Controller backwards compatibility!)
+        # 4. Map alle sub-widget eigenschappen naar MainView
         self._map_sub_properties()
 
     # ==========================================
@@ -112,21 +221,20 @@ class MainView(tk.Tk):
         self.beheer_notebook = ttk.Notebook(self.tab_beheer)
         self.beheer_notebook.pack(expand=True, fill='both', padx=5, pady=5)
 
-        # Instantiëren van de gedecoupleerde sub-frames
         self.studenten_frame = StudentenBeheerFrame(self.beheer_notebook, self)
         self.vervoer_frame = VervoersmiddelenFrame(self.beheer_notebook, self)
         self.logs_frame = VerplaatsingenFrame(self.beheer_notebook, self)
+        self.aanwezigheid_beheer_frame = AanwezighedenBeheerFrame(self.beheer_notebook, self) # <-- NIEUW
 
-        # Toevoegen aan sub-notebook
         self.beheer_notebook.add(self.studenten_frame, text='Studenten Beheren')
         self.beheer_notebook.add(self.vervoer_frame, text='Vervoersmiddelen')
         self.beheer_notebook.add(self.logs_frame, text='Verplaatsingen (Logs)')
+        self.beheer_notebook.add(self.aanwezigheid_beheer_frame, text='Aanwezigheden Beheren (Nieuw)') # <-- NIEUW
 
     def _build_dashboard_tab(self):
         self.dashboard_notebook = ttk.Notebook(self.tab_dashboard)
         self.dashboard_notebook.pack(expand=True, fill='both', padx=5, pady=5)
 
-        # Instantiëren van de gedecoupleerde sub-frames
         self.overzicht_frame = OverzichtDataFrame(self.dashboard_notebook, self)
         self.vervoer_analyse_frame = VervoersmiddelenAnalyseFrame(self.dashboard_notebook, self)
         self.afstand_analyse_frame = AfstandAnalyseFrame(self.dashboard_notebook, self)
@@ -134,8 +242,8 @@ class MainView(tk.Tk):
         self.categorie_analyse_frame = CategorieAnalyseFrame(self.dashboard_notebook, self)
         self.co2_analyse_frame = CO2AnalyseFrame(self.dashboard_notebook, self)
         self.tab_gezondheid_analyse = GezondheidAnalyseFrame(self.dashboard_notebook, self)
+        self.aanwezigheid_analyse_frame = AanwezigheidsAnalyseFrame(self.dashboard_notebook, self) # <-- NIEUW
 
-        # Toevoegen aan sub-notebook
         self.dashboard_notebook.add(self.overzicht_frame, text='Overzicht Data')
         self.dashboard_notebook.add(self.vervoer_analyse_frame, text='Vervoersmiddelen')
         self.dashboard_notebook.add(self.afstand_analyse_frame, text='Afstand Analyse')
@@ -143,6 +251,7 @@ class MainView(tk.Tk):
         self.dashboard_notebook.add(self.categorie_analyse_frame, text='Afstandscategorieën (Extra)')
         self.dashboard_notebook.add(self.co2_analyse_frame, text='CO₂ Analyse (Uitbreiding)')
         self.dashboard_notebook.add(self.tab_gezondheid_analyse, text='Gezondheidsindex')
+        self.dashboard_notebook.add(self.aanwezigheid_analyse_frame, text='Aanwezigheidsanalyse (Nieuw)') # <-- NIEUW
 
     def _map_sub_properties(self):
         """Mapt alle sub-component eigenschappen direct op self om controller.py intact te houden."""
@@ -161,6 +270,9 @@ class MainView(tk.Tk):
         self.combo_vervoer = self.logs_frame.combo_vervoer
         self.entry_datum = self.logs_frame.entry_datum
         self.tree_logs = self.logs_frame.tree_logs
+
+        # NIEUW: Aanwezigheden Beheer Mappings
+        self.tree_aanw = self.aanwezigheid_beheer_frame.tree_aanw
 
         # Dashboard Overzicht
         self.combo_overzicht_tabel = self.overzicht_frame.combo_overzicht_tabel
@@ -200,12 +312,15 @@ class MainView(tk.Tk):
         self.btn_toggle_gezondheid = self.tab_gezondheid_analyse.btn_toggle_gezondheid
         self.canvas_gezondheid = self.tab_gezondheid_analyse.canvas_gezondheid
 
+        # NIEUW: Aanwezigheid Analyse Mappings
+        self.btn_toggle_aanwezigheid = self.aanwezigheid_analyse_frame.btn_toggle_aanwezigheid
+        self.canvas_aanwezigheid = self.aanwezigheid_analyse_frame.canvas_aanwezigheid
+
 
     # ==========================================
     # CRISP FLAT DRAWINGS (BRIDGED TO CHARTS MODULE)
     # ==========================================
     def update_grafiek(self, chart_id, data=None, titel=None):
-        """Update de opgeslagen data of forceert een hertweergave op basis van het huidige geselecteerde type."""
         if data is not None:
             self.chart_states[chart_id]['data'] = data
         if titel is not None:
@@ -215,13 +330,11 @@ class MainView(tk.Tk):
         canvas = getattr(self, f"canvas_{chart_id}")
         btn = getattr(self, f"btn_toggle_{chart_id}")
         
-        # Extract correct subset if there are distinct datasets for pie vs bar (like Health index)
         if isinstance(state['data'], dict) and 'pie' in state['data'] and 'bar' in state['data']:
             chart_data = state['data']['pie'] if state['type'] == 'pie' else state['data']['bar']
         else:
             chart_data = state['data']
             
-        # Roep de gedeelde module charts.py aan om de visualisatie op te bouwen
         if state['type'] == 'pie':
             charts.teken_cirkeldiagram(canvas, chart_data, state['titel'])
             btn.config(text=" Wissel naar Staafdiagram ")
@@ -230,7 +343,6 @@ class MainView(tk.Tk):
             btn.config(text=" Wissel naar Cirkeldiagram ")
 
     def toggle_grafiek(self, chart_id):
-        """Flipt de state tussen staaf- en cirkeldiagram en roept update_grafiek aan."""
         current_type = self.chart_states[chart_id]['type']
         self.chart_states[chart_id]['type'] = 'bar' if current_type == 'pie' else 'pie'
         self.update_grafiek(chart_id)

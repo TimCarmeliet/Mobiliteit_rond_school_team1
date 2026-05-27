@@ -21,7 +21,7 @@ class StudentenBeheerFrame(ttk.Frame):
         ttk.Label(form_frame, text="Afstand (km):").grid(row=0, column=4, padx=5, pady=5, sticky="e")
         self.entry_afstand = ttk.Entry(form_frame, width=10)
         self.entry_afstand.grid(row=0, column=5, padx=5, pady=5, sticky="w")
-        
+
         # Buttons
         btn_frame = ttk.Frame(self)
         btn_frame.pack(fill="x", padx=10, pady=5)
@@ -124,4 +124,47 @@ class VerplaatsingenFrame(ttk.Frame):
 
         sb = ttk.Scrollbar(list_frame, orient="vertical", command=self.tree_logs.yview)
         self.tree_logs.configure(yscrollcommand=sb.set)
+        sb.pack(side='right', fill='y')
+
+
+class AanwezighedenBeheerFrame(ttk.Frame):
+    def __init__(self, parent, view):
+        super().__init__(parent)
+        self.view = view
+
+        # Form fields
+        form_frame = ttk.Frame(self)
+        form_frame.pack(fill="x", padx=10, pady=10)
+        
+        ttk.Label(form_frame, text="Student:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
+        self.combo_student = ttk.Combobox(form_frame, state="readonly", width=30)
+        self.combo_student.grid(row=0, column=1, padx=5, pady=5, sticky="w")
+        
+        ttk.Label(form_frame, text="Datum (YYYY-MM-DD):").grid(row=0, column=2, padx=5, pady=5, sticky="e")
+        self.entry_datum = ttk.Entry(form_frame, width=15)
+        self.entry_datum.grid(row=0, column=3, padx=5, pady=5, sticky="w")
+        
+        ttk.Label(form_frame, text="Status:").grid(row=0, column=4, padx=5, pady=5, sticky="e")
+        self.combo_status = ttk.Combobox(form_frame, values=['aanwezig', 'afwezig', 'laat'], state="readonly", width=12)
+        self.combo_status.grid(row=0, column=5, padx=5, pady=5, sticky="w")
+        
+        # Buttons
+        btn_frame = ttk.Frame(self)
+        btn_frame.pack(fill="x", padx=10, pady=5)
+        
+        ttk.Button(btn_frame, text="➕ Registreer", command=lambda: self.view.controller.add_aanwezigheid()).pack(side="left", padx=5)
+        ttk.Button(btn_frame, text="🗑️ Verwijderen", style="Danger.TButton", command=lambda: self.view.controller.delete_aanwezigheid()).pack(side="left", padx=5)
+
+        # List with Scrollbar
+        list_frame = ttk.Frame(self)
+        list_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+        self.tree_aanw = ttk.Treeview(list_frame, columns=("id", "student", "datum", "status"), show="headings")
+        for col, text in zip(("id", "student", "datum", "status"), ("ID", "Student (Naam / Klas)", "Datum", "Status")):
+            self.tree_aanw.heading(col, text=text)
+            self.tree_aanw.column(col, anchor="center", width=80 if col == "id" else 200)
+        self.tree_aanw.pack(side='left', fill="both", expand=True)
+
+        sb = ttk.Scrollbar(list_frame, orient="vertical", command=self.tree_aanw.yview)
+        self.tree_aanw.configure(yscrollcommand=sb.set)
         sb.pack(side='right', fill='y')

@@ -1,3 +1,6 @@
+import tkinter as tk
+from tkinter import ttk
+
 class Controller:
     def __init__(self, model, view):
         self.model = model
@@ -7,15 +10,17 @@ class Controller:
 
     def refresh_all_tables(self):
         """Haalt alle data op en vult de schermen, dropdowns, dashboards én CO2 tabblad."""
-        # 1. Zorg dat de CO2 tabel bestaat
+        # 1. Zorg dat de CO2 en Aanwezigheden tabellen bestaan in de database
         self.model.setup_co2_uitbreiding()
+        if hasattr(self.model, 'setup_aanwezigheden_uitbreiding'):
+            self.model.setup_aanwezigheden_uitbreiding()
 
-        # 2. Haal alle data op uit de database
+        # 2. Haal alle basisdata op uit de database
         studenten = self.model.get_all_students()
         transports = self.model.get_all_transports()
         logs = self.model.get_all_logs()
 
-        # 3. Update de beheer-treeviews
+        # 3. Update de standaard beheer-treeviews
         self.view.populate_tree(self.view.tree_students, studenten)
         self.view.populate_tree(self.view.tree_trans, transports)
         self.view.populate_tree(self.view.tree_logs, logs)
@@ -41,6 +46,19 @@ class Controller:
             
         self.update_co2_analyse()
         self.update_gezondheid_analyse(studenten, transports, logs)
+
+        # 7. --- UITBREIDING 2: AANWEZIGHEDEN (RECHTSTREEKS VIA FRAME) ---
+        if hasattr(self.view, 'aanwezigheid_beheer_frame'):
+            # Vul de tabel met opgeslagen aanwezigheden
+            try:
+                aanw_data = self.model.get_all_aanwezigheden()
+                self.view.populate_tree(self.view.tree_aanw, aanw_data)
+            except Exception as e:
+                print(f"Opmerking: Aanwezigheidstabel nog leeg of {e}")
+
+            # Vul de studenten dropdown in het Aanwezigheden frame naar jouw nieuwe component
+            student_lijst = [f"{s[0]} - {s[1]}" for s in studenten]
+            self.view.aanwezigheid_beheer_frame.combo_student['values'] = student_lijst
 
     def laad_overzicht_tabel(self):
         """Laadt de ruwe databasetabel gekozen in het dashboard tabblad."""
@@ -81,13 +99,12 @@ class Controller:
             vervoer_grafiek_data[t_type] = count
             
         self.view.populate_tree(self.view.tree_vervoer_stat, vervoer_rows)
-        # Nieuwe universele aanroep:
         self.view.update_grafiek('vervoer', vervoer_grafiek_data, "Procentuele Verdeling per Vervoersmiddel")
 
         # 3. Afstand Analyse
         totale_afstand_all = sum(s[3] for s in studenten)
         gem_afstand_all = round(totale_afstand_all / len(studenten), 2) if studenten else 0
-        self.view.lbl_gem_afstand_totaal.config(text=f"Algemene gemiddelde afstand tot school van alle studenten: {gem_afstand_all} km")
+        self.view.lbl_gem_afstand_totaal.config(text=f"Algemene gemiddelde afstand: {gem_afstand_all} km")
         
         vervoer_afstanden = {t_type: [] for t_type in trans_dict.values()}
         for log in logs:
@@ -241,77 +258,8 @@ class Controller:
         self.view.populate_tree(self.view.tree_co2_stat, co2_rows)
         self.view.update_grafiek('co2', co2_grafiek_data, "Totale CO₂ Uitstoot (Gram) o.b.v. Filters")
 
-    # --- CRUD Acties ---
-    def add_student(self):
-        data = self.view.get_student_form_data()
-        if not all(data.values()): return self.view.show_error("Vul alles in!")
-        try:
-            self.model.add_student(data['naam'], data['klas'], float(data['afstand'].replace(',', '.')))
-            self.view.clear_student_form()
-            self.refresh_all_tables()
-            self.view.show_info("Student toegevoegd.")
-        except ValueError: self.view.show_error("Ongeldige afstand.")
-
-    def update_student(self):
-        student_id = self.view.get_selected_id(self.view.tree_students)
-        if not student_id: return self.view.show_error("Selecteer een student.")
-        data = self.view.get_student_form_data()
-        if not all(data.values()): return self.view.show_error("Vul alles in!")
-        try:
-            self.model.update_student(student_id, data['naam'], data['klas'], float(data['afstand'].replace(',', '.')))
-            self.view.clear_student_form()
-            self.refresh_all_tables()
-            self.view.show_info("Student aangepast.")
-        except ValueError: self.view.show_error("Ongeldige afstand.")
-
-    def delete_student(self):
-        student_id = self.view.get_selected_id(self.view.tree_students)
-        if not student_id: return self.view.show_error("Selecteer een student.")
-        self.model.delete_student(student_id)
-        self.view.clear_student_form()
-        self.refresh_all_tables()
-        self.view.show_info("Student en bijbehorende logs verwijderd.")
-
-    def add_transport(self):
-        type_vervoer = self.view.entry_vervoer_type.get()
-        if not type_vervoer: return self.view.show_error("Vul een type in.")
-        self.model.add_transport(type_vervoer)
-        self.view.entry_vervoer_type.delete(0, 'end')
-        self.refresh_all_tables()
-        self.view.show_info("Vervoer toegevoegd.")
-
-    def delete_transport(self):
-        trans_id = self.view.get_selected_id(self.view.tree_trans)
-        if not trans_id: return self.view.show_error("Selecteer vervoer.")
-        self.model.delete_transport(trans_id)
-        self.refresh_all_tables()
-        self.view.show_info("Vervoer en bijbehorende logs verwijderd.")
-
-    def add_log(self):
-        student_val = self.view.combo_student.get()
-        vervoer_val = self.view.combo_vervoer.get()
-        datum = self.view.entry_datum.get()
-
-        if not student_val or not vervoer_val or not datum:
-            return self.view.show_error("Vul alle log-velden in!")
-
-        student_id = int(student_val.split(" - ")[0])
-        vervoer_id = int(vervoer_val.split(" - ")[0])
-
-        self.model.add_log(student_id, vervoer_id, datum)
-        self.view.entry_datum.delete(0, 'end')
-        self.refresh_all_tables()
-        self.view.show_info("Verplaatsing opgeslagen.")
-
-    def delete_log(self):
-        log_id = self.view.get_selected_id(self.view.tree_logs)
-        if not log_id: return self.view.show_error("Selecteer een log.")
-        self.model.delete_log(log_id)
-        self.refresh_all_tables()
-        self.view.show_info("Log verwijderd.")
-
     def update_gezondheid_analyse(self, studenten, transports, logs):
-        """Berekent de Gezondheidsindex (Actief vs. Passief) per klas en voor de gehele school."""
+        """Berekent de Gezondheidsindex (Actief vs. Passief) per klas."""
         stud_klas = {s[0]: str(s[2]).strip() for s in studenten}
         trans_type = {t[0]: str(t[1]).strip().lower() for t in transports}
         
@@ -357,6 +305,153 @@ class Controller:
             {'pie': pie_data, 'bar': bar_data}, 
             "Gezondheidsindex (Actief vs. Passief)"
         )
+
+    # --- RECHTSTREEKSE INTERACTIE MET HET AANWEZIGHEDEN FRAME ---
+    def add_aanwezigheid(self):
+        """Voegt een nieuwe aanwezigheidsregistratie toe."""
+        frame = self.view.aanwezigheid_beheer_frame
+        stud_val = frame.combo_student.get()
+        datum = frame.entry_datum.get().strip()
+        status = frame.combo_status.get()
+
+        if not stud_val or not datum or not status:
+            return self.view.show_error("Vul alle velden in om te registreren!")
+
+        try:
+            student_id = int(stud_val.split(" - ")[0])
+            self.model.add_aanwezigheid(student_id, datum, status)
+            frame.entry_datum.delete(0, 'end')
+            self.refresh_all_tables()
+            self.view.show_info("Aanwezigheid succesvol geregistreerd.")
+        except Exception as e:
+            self.view.show_error(f"Fout bij opslaan: {str(e)}")
+
+    def delete_aanwezigheid(self):
+        """Verwijdert de geselecteerde registratie."""
+        frame = self.view.aanwezigheid_beheer_frame
+        aanw_id = self.view.get_selected_id(frame.tree_aanw)
+        
+        if not aanw_id:
+            return self.view.show_error("Selecteer eerst een rij uit de tabel.")
+
+        self.model.delete_aanwezigheid(aanw_id)
+        self.refresh_all_tables()
+        self.view.show_info("Registratie succesvol verwijderd.")
+
+    def update_aanwezigheid_analyse(self):
+        """Genereert de gekozen analytische tabel en bijbehorende grafiek."""
+        frame = self.view.aanwezigheid_analyse_frame
+        analyse_type = frame.combo_analyse.get()
+        tree_analyse = frame.tree_aanw_analyse
+        chart_data = {}
+
+        if analyse_type == "Aantal afwezigheden per klas":
+            headers = ("Klas", "Aantal Afwezig")
+            data = self.model.query_afwezigheden_per_klas()
+            titel = "Aantal afwezigheden per klas"
+            chart_data = {str(row[0]): row[1] for row in data}
+
+        elif analyse_type == "Percentage aanwezig per klas":
+            headers = ("Klas", "Aanwezigheid (%)")
+            data = self.model.query_percentage_aanwezig_per_klas()
+            titel = "Aanwezigheidspercentage per klas"
+            chart_data = {str(row[0]): row[1] for row in data}
+
+        else:  # Vervoersmiddel vs Aanwezigheid
+            headers = ("Vervoersmiddel", "Status", "Aantal")
+            data = self.model.query_vervoer_vs_aanwezigheid()
+            titel = "Status per Vervoersmiddel"
+            chart_data = {f"{row[0]} ({row[1]})": row[2] for row in data}
+
+        tree_analyse["columns"] = headers
+        tree_analyse["show"] = "headings"
+        for h in headers:
+            tree_analyse.heading(h, text=h)
+            tree_analyse.column(h, anchor="center", width=150)
+
+        self.view.populate_tree(tree_analyse, data)
+        self.view.update_grafiek('aanwezigheid', chart_data, titel)
+
+    # --- Standaard CRUD Acties ---
+    def add_student(self):
+        data = self.view.get_student_form_data()
+        if not all(data.values()): return self.view.show_error("Vul alles in!")
+        try:
+            self.model.add_student(data['naam'], data['klas'], float(data['afstand'].replace(',', '.')))
+            self.view.clear_student_form()
+            self.refresh_all_tables()
+            self.view.show_info("Student toegevoegd.")
+        except ValueError: self.view.show_error("Ongeldige afstand.")
+
+    def update_student(self):
+        student_id = self.view.get_selected_id(self.view.tree_students)
+        if not student_id: return self.view.show_error("Selecteer een student.")
+        data = self.view.get_student_form_data()
+        if not all(data.values()): return self.view.show_error("Vul alles in!")
+        try:
+            self.model.update_student(student_id, data['naam'], data['klas'], float(data['afstand'].replace(',', '.')))
+            self.view.clear_student_form()
+            self.refresh_all_tables()
+            self.view.show_info("Student aangepast.")
+        except ValueError: self.view.show_error("Ongeldige afstand.")
+
+    def delete_student(self):
+        student_id = self.view.get_selected_id(self.view.tree_students)
+        if not student_id: return self.view.show_error("Selecteer een student.")
+        self.model.delete_student(student_id)
+        self.view.clear_student_form()
+        self.refresh_all_tables()
+        self.view.show_info("Student en bijbehorende logs verwijderd.")
+
+    def add_transport(self):
+        type_vervoer = self.view.entry_vervoer_type.get()
+        if not type_vervoer: return self.view.show_error("Vul een type in.")
+        self.model.add_transport(type_vervoer)
+        self.view.entry_vervoer_type.delete(0, 'end')
+        self.refresh_all_tables()
+        self.view.show_info("Vervoer toegevoegd.")
+
+    def delete_transport(self):
+        trans_id = self.view.get_selected_id(self.view.tree_trans)
+        if not trans_id: return self.view.show_error("Selecteer vervoer.")
+        self.model.delete_transport(trans_id)
+        self.refresh_all_tables()
+        self.view.show_info("Vervoer en bijbehorende logs verwijderd.")
+
+    def add_aanwezigheid(self):
+        """Voegt een nieuwe aanwezigheidsregistratie toe."""
+        frame = self.view.aanwezigheid_beheer_frame
+        stud_val = frame.combo_student.get()
+        datum = frame.entry_datum.get().strip()
+        gui_status = frame.combo_status.get()
+
+        # Mapping zorgt dat de database de juiste hoofdletters krijgt
+        status_mapping = {
+            "Aanwezig": "Aanwezig",
+            "Afwezig": "Afwezig",
+            "Te laat": "Te laat"
+        }
+        
+        status = status_mapping.get(gui_status)
+
+        if not stud_val or not datum or not status:
+            return self.view.show_error("Vul alle velden in om te registreren!")
+
+        try:
+            student_id = int(stud_val.split(" - ")[0])
+            self.model.add_aanwezigheid(student_id, datum, status)
+            frame.entry_datum.delete(0, 'end')
+            self.refresh_all_tables()
+            self.view.show_info("Aanwezigheid succesvol geregistreerd.")
+        except Exception as e:
+            self.view.show_error(f"Fout bij opslaan: {str(e)}")
+
+    def delete_log(self):
+        log_id = self.view.get_selected_id(self.view.tree_logs)
+        if not log_id: return self.view.show_error("Selecteer een log.")
+        self.model.delete_log(log_id)
+        self.refresh_all_tables()
+        self.view.show_info("Log verwijderd.")
 
     def start(self):
         self.view.mainloop()
