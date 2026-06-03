@@ -1,3 +1,26 @@
+"""
+view/gui.py — De View-laag: Het Hoofdvenster (MainView Coordinator).
+
+Dit bestand is het "commandocentrum" van de visuele interface. Het:
+  1. Erft van tk.Tk — het IS het hoofdvenster van de applicatie.
+  2. Bouwt de twee hoofd-tabs op: "Data Beheer" en "Dashboard & Analyses".
+  3. Importeert en plaatst de gedecoupleerde sub-frames (uit beheer_frames.py
+     en dashboard_frames.py) in hun respectieve tabbladen.
+  4. Beheert het kleurenthema (Light/Dark Mode) en past het dynamisch toe.
+  5. Brugt de tekenfuncties uit charts.py aan voor grafiekweergave.
+
+Belangrijk architecturaal detail — Eigenschap Mapping:
+─────────────────────────────────────────────────────
+Na het decoupling van de GUI in aparte sub-frames, zit bijv. het invoerveld
+voor studentnaam in StudentenBeheerFrame (self.studenten_frame.entry_naam).
+Maar de Controller verwacht self.view.entry_naam (zoals in de oorspronkelijke code).
+
+Om de Controller NIET te hoeven aanpassen, mapt _map_sub_properties() alle
+geneste attributen terug naar het MainView-niveau. Dit is het "Facade Pattern":
+de Controller ziet één simpele interface, terwijl achter de schermen alles
+netjes verdeeld is over meerdere componenten.
+"""
+
 import tkinter as tk
 from tkinter import ttk, messagebox
 
@@ -10,13 +33,32 @@ from view.dashboard_frames import (
 import view.charts as charts
 
 class MainView(tk.Tk):
+    """
+    Het hoofdvenster van de applicatie — de top-level View in het MVC-patroon.
+
+    Verantwoordelijkheden:
+      • Opbouw van de volledige UI-structuur (notebooks, tabs, header)
+      • Beheer van het kleurenthema (light/dark) en dynamische styling
+      • Grafiekstatus bijhouden en hertekenen via charts.py
+      • Facade-interface bieden aan de Controller via eigenschap-mapping
+    """
+
     def __init__(self):
         super().__init__()
         self.title("Mobiliteit rond de School - Project")
         self.geometry("1100x850") 
         self.controller = None
         
-        # Geheugen voor de status van de grafieken
+        # =====================================================================
+        # Grafiek State Management
+        # Elke grafiek heeft een 'state' die onthoudt:
+        #   - type:  'pie' of 'bar' (welk diagramtype is actief?)
+        #   - data:  de actuele dataset
+        #   - titel: de titel boven de grafiek
+        #
+        # Wanneer de gebruiker op "Wissel Grafiektype" klikt, flipt alleen
+        # het 'type' veld en wordt de grafiek hertekend met dezelfde data.
+        # =====================================================================
         self.chart_states = {
             'vervoer': {'type': 'pie', 'data': {}, 'titel': ""},
             'afstand': {'type': 'bar', 'data': {}, 'titel': ""},
@@ -26,7 +68,13 @@ class MainView(tk.Tk):
             'gezondheid': {'type': 'pie', 'data': {}, 'titel': ""}
         }
 
-        # Thema definities (Dark & Light tokens)
+        # =====================================================================
+        # Thema Definities (Design Tokens)
+        # Elk thema is een dictionary met kleurcodes voor elk UI-element.
+        # Door deze tokens centraal te definiëren, hoeven individuele
+        # componenten niet te weten welke kleur ze moeten gebruiken —
+        # ze vragen gewoon theme['text'] of theme['bg'] op.
+        # =====================================================================
         self.themes = {
             'light': {
                 'bg': "#f4f5f8",          # Crisp light grey
@@ -55,7 +103,8 @@ class MainView(tk.Tk):
         }
         self.current_theme = 'light' # Standaard light mode om origineel uiterlijk te behouden
 
-        # Bouw top header bar (Voor thema knop, boven notebooks)
+        # ── Top Header Bar ──
+        # Een dunne balk bovenaan het venster met de app-titel en thema-knop
         self.header_bar = tk.Frame(self, pady=10)
         self.header_bar.pack(fill='x', padx=10)
         
@@ -65,7 +114,10 @@ class MainView(tk.Tk):
         self.btn_toggle_theme = ttk.Button(self.header_bar, text="🌓 Wissel Kleurenthema", command=self.toggle_theme)
         self.btn_toggle_theme.pack(side='right', padx=10)
 
-        # Hoofd Notebook (Original Structure)
+        # ── Hoofd Notebook (Tabbladen) ──
+        # Het notebook is de container met twee hoofdtabs:
+        #   1. Data Beheer (CRUD) — voor het invoeren/bewerken van data
+        #   2. Dashboard & Analyses — voor het bekijken van statistieken
         self.notebook = ttk.Notebook(self)
         self.notebook.pack(expand=True, fill='both', padx=10, pady=(5, 10))
         
@@ -86,13 +138,30 @@ class MainView(tk.Tk):
         self.apply_theme()
 
     def active_theme(self):
+        """Retourneert de dictionary met kleurcodes van het huidige thema."""
         return self.themes[self.current_theme]
 
     def toggle_theme(self):
+        """Wisselt tussen light en dark mode en past het thema direct toe.
+        
+        Dit is een simpele flip: als het 'dark' is, wordt het 'light',
+        en andersom. Daarna wordt apply_theme() aangeroepen om ALLE
+        visuele elementen te updaten.
+        """
         self.current_theme = 'light' if self.current_theme == 'dark' else 'dark'
         self.apply_theme()
 
     def apply_theme(self):
+        """Past het actieve kleurenthema toe op ALLE visuele componenten.
+        
+        Dit is de meest complexe methode in de View. Hij configureert:
+          1. De TTK Style-engine (voor Buttons, Entries, Treeviews, Tabs, ...)
+          2. De native Tkinter-elementen (achtergrondkleur venster, header)
+          3. Alle canvassen (achtergrondkleur) + herteekening van grafieken
+        
+        Tkinter gebruikt het 'clam' thema als basis — dit is het meest
+        aanpasbare standaardthema dat op alle besturingssystemen werkt.
+        """
         theme = self.active_theme()
         bg = theme['bg']
         card_bg = theme['card_bg']
@@ -163,14 +232,25 @@ class MainView(tk.Tk):
             canvas.config(bg=card_bg, highlightbackground=border)
             self.update_grafiek(chart_id)
 
-    # ==========================================
+    # =========================================================================
     # SUB-COMPONENT FRAME BUILDERS
-    # ==========================================
+    # Deze methoden instantiëren de gedecoupleerde frames en plaatsen ze
+    # in geneste notebooks (tabs binnen tabs).
+    # =========================================================================
     def _build_beheer_tab(self):
+        """Bouwt het 'Data Beheer'-tabblad op met drie sub-tabs voor CRUD-operaties.
+        
+        Structuur: Hoofd Notebook → Data Beheer tab → Beheer Notebook
+          → Studenten Beheren
+          → Vervoersmiddelen
+          → Verplaatsingen (Logs)
+        """
         self.beheer_notebook = ttk.Notebook(self.tab_beheer)
         self.beheer_notebook.pack(expand=True, fill='both', padx=5, pady=5)
 
         # Instantiëren van de gedecoupleerde sub-frames
+        # Elke frame krijgt 'self' (de MainView) mee zodat hij
+        # callbacks kan aanroepen via self.view.controller.methode()
         self.studenten_frame = StudentenBeheerFrame(self.beheer_notebook, self)
         self.vervoer_frame = VervoersmiddelenFrame(self.beheer_notebook, self)
         self.logs_frame = VerplaatsingenFrame(self.beheer_notebook, self)
@@ -181,6 +261,17 @@ class MainView(tk.Tk):
         self.beheer_notebook.add(self.logs_frame, text='Verplaatsingen (Logs)')
 
     def _build_dashboard_tab(self):
+        """Bouwt het 'Dashboard & Analyses'-tabblad op met zeven analyse-sub-tabs.
+        
+        Structuur: Hoofd Notebook → Dashboard tab → Dashboard Notebook
+          → Overzicht Data        (ruwe databasetabellen bekijken)
+          → Vervoersmiddelen      (verdeling analyse)
+          → Afstand Analyse       (gemiddelde afstanden)
+          → Klassenanalyse        (vergelijking per klas)
+          → Afstandscategorieën   (eigen analyse: kort/middel/lang)
+          → CO₂ Analyse           (uitbreiding 1: milieu-impact)
+          → Gezondheidsindex      (uitbreiding 2: actief vs. passief)
+        """
         self.dashboard_notebook = ttk.Notebook(self.tab_dashboard)
         self.dashboard_notebook.pack(expand=True, fill='both', padx=5, pady=5)
 
@@ -203,7 +294,18 @@ class MainView(tk.Tk):
         self.dashboard_notebook.add(self.tab_gezondheid_analyse, text='Gezondheidsindex')
 
     def _map_sub_properties(self):
-        """Mapt alle sub-component eigenschappen direct op self om controller.py intact te houden."""
+        """Mapt alle sub-component eigenschappen direct op self om controller.py intact te houden.
+        
+        Dit is het Facade Pattern in actie:
+        ────────────────────────────────────
+        Vóór refactoring:  self.entry_naam leefde rechtstreeks in MainView.
+        Na refactoring:    self.entry_naam leeft in StudentenBeheerFrame.
+        
+        Door hier self.entry_naam = self.studenten_frame.entry_naam te schrijven,
+        kan de Controller gewoon self.view.entry_naam blijven gebruiken alsof
+        er niets is veranderd. Geen enkele regel in controller.py hoefde
+        aangepast te worden!
+        """
         # Studenten Beheer
         self.entry_naam = self.studenten_frame.entry_naam
         self.entry_klas = self.studenten_frame.entry_klas
@@ -259,11 +361,19 @@ class MainView(tk.Tk):
         self.canvas_gezondheid = self.tab_gezondheid_analyse.canvas_gezondheid
 
 
-    # ==========================================
-    # CRISP FLAT DRAWINGS (BRIDGED TO CHARTS MODULE)
-    # ==========================================
+    # =========================================================================
+    # GRAFIEK MANAGEMENT
+    # Deze methoden beheren de grafiek-states en delegeren het daadwerkelijke
+    # tekenen naar de charts.py module.
+    # =========================================================================
     def update_grafiek(self, chart_id, data=None, titel=None):
-        """Update de opgeslagen data of forceert een hertweergave op basis van het huidige geselecteerde type."""
+        """Update de opgeslagen data of forceert een hertweergave op basis van het huidige geselecteerde type.
+        
+        Deze methode wordt op twee manieren aangeroepen:
+          1. Met data + titel (vanuit de Controller): slaat de nieuwe data op EN tekent.
+          2. Zonder data (vanuit apply_theme): tekent opnieuw met bestaande data
+             maar in de nieuwe themakleuren.
+        """
         if data is not None:
             self.chart_states[chart_id]['data'] = data
         if titel is not None:
@@ -273,7 +383,9 @@ class MainView(tk.Tk):
         canvas = getattr(self, f"canvas_{chart_id}")
         btn = getattr(self, f"btn_toggle_{chart_id}")
         
-        # Extract correct subset if there are distinct datasets for pie vs bar (like Health index)
+        # Speciale logica voor de Gezondheidsindex: deze heeft TWEE datasets
+        # (één voor pie, één voor bar) omdat het cirkeldiagram schoolbrede
+        # totalen toont, terwijl het staafdiagram per-klas percentages toont.
         if isinstance(state['data'], dict) and 'pie' in state['data'] and 'bar' in state['data']:
             chart_data = state['data']['pie'] if state['type'] == 'pie' else state['data']['bar']
         else:
@@ -290,25 +402,35 @@ class MainView(tk.Tk):
             btn.config(text=" Wissel naar Cirkeldiagram ")
 
     def toggle_grafiek(self, chart_id):
-        """Flipt de state tussen staaf- en cirkeldiagram en roept update_grafiek aan."""
+        """Flipt de state tussen staaf- en cirkeldiagram en roept update_grafiek aan.
+        
+        Het wisselen van grafiektype verandert NIET de data — alleen de
+        visuele representatie. De data blijft exact hetzelfde.
+        """
         current_type = self.chart_states[chart_id]['type']
         self.chart_states[chart_id]['type'] = 'bar' if current_type == 'pie' else 'pie'
         self.update_grafiek(chart_id)
 
 
-    # ==========================================
-    # DATA HELPER BINDS & ORCHESTRATION METHODS
-    # ==========================================
+    # =========================================================================
+    # DATA HELPER METHODEN
+    # Kleine hulpmethoden die de Controller aanroept om met de UI te interacteren.
+    # Deze vormen de publieke API van de View.
+    # =========================================================================
     def set_controller(self, controller): 
+        """Koppelt de Controller aan deze View, zodat UI-callbacks werken."""
         self.controller = controller
 
     def show_error(self, message): 
+        """Toont een foutmelding-popup aan de gebruiker."""
         messagebox.showerror("Fout", message)
 
     def show_info(self, message): 
+        """Toont een informatiemelding-popup aan de gebruiker."""
         messagebox.showinfo("Info", message)
 
     def get_student_form_data(self): 
+        """Leest de drie invoervelden uit en retourneert ze als dictionary."""
         return {
             "naam": self.entry_naam.get().strip(), 
             "klas": self.entry_klas.get().strip(), 
@@ -316,10 +438,16 @@ class MainView(tk.Tk):
         }
 
     def clear_student_form(self): 
+        """Maakt alle drie de studentinvoervelden leeg na een succesvolle actie."""
         for e in (self.entry_naam, self.entry_klas, self.entry_afstand):
             e.delete(0, tk.END)
 
     def _on_select_student(self, event):
+        """Event handler: wanneer de gebruiker een student selecteert in de tabel,
+        worden de formuliervelden automatisch gevuld met die studentgegevens.
+        
+        Dit maakt het 'Aanpassen'-werkflow intuïtief: selecteer → wijzig → klik Aanpassen.
+        """
         selected = self.tree_students.selection()
         if selected:
             v = self.tree_students.item(selected[0])['values']
@@ -329,16 +457,28 @@ class MainView(tk.Tk):
             self.entry_afstand.insert(0, str(v[3]))
 
     def populate_tree(self, tree, data):
+        """Wist alle rijen in een Treeview en vult hem opnieuw met de gegeven data.
+        
+        Dit is een universele helper die door de hele applicatie wordt gebruikt
+        voor zowel de beheertabellen als de analysetabellen.
+        """
         for item in tree.get_children(): 
             tree.delete(item)
         for row in data: 
             tree.insert("", tk.END, values=row)
 
     def get_selected_id(self, tree):
+        """Retourneert het ID (eerste kolom) van de geselecteerde rij, of None."""
         selected = tree.selection()
         return tree.item(selected[0])['values'][0] if selected else None
 
     def setup_overzicht_tree(self, headers, data):
+        """Configureert de overzichtstabel met dynamische kolomkoppen en data.
+        
+        Anders dan populate_tree() stelt deze methode ook de kolomstructuur in,
+        omdat de kolommen veranderen afhankelijk van welke tabel wordt bekeken
+        (Students heeft 4 kolommen, Transport heeft 2, etc.).
+        """
         self.tree_overzicht["columns"] = headers
         self.tree_overzicht["show"] = "headings"
         for h in headers:
@@ -347,7 +487,9 @@ class MainView(tk.Tk):
         self.populate_tree(self.tree_overzicht, data)
 
     def teken_grafiek(self, canvas, data_dict, titel):
+        """Shortcut: tekent een staafgrafiek met het actieve thema."""
         charts.teken_grafiek(canvas, data_dict, titel, self.active_theme())
 
     def teken_cirkeldiagram(self, canvas, data_dict, titel):
+        """Shortcut: tekent een cirkeldiagram met het actieve thema."""
         charts.teken_cirkeldiagram(canvas, data_dict, titel, self.active_theme())
