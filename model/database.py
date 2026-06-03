@@ -7,6 +7,7 @@ class DatabaseModel:
         # Zorg dat alle uitbreidingen direct klaarstaan bij het opstarten
         self.setup_co2_uitbreiding()
         self.setup_aanwezigheden_uitbreiding()
+        self.setup_reistijd_uitbreiding()
 
     def _connect(self):
         return sqlite3.connect(self.db_path)
@@ -81,7 +82,44 @@ class DatabaseModel:
             cursor.execute("DELETE FROM Aanwezigheden WHERE id = ?", (aanw_id,))
 
     # =========================================================================
-    # ANALYTISCHE QUERIES VOOR DE GRAFIEKEN
+    # UITBREIDING 3: REISTIJD ANALYSE SETUP & QUERIES
+    # =========================================================================
+    def setup_reistijd_uitbreiding(self):
+        """Zorgt ervoor dat de tabel Mobility_log een kolom 'reistijd' heeft (indien nog niet aanwezig)."""
+        with self._get_cursor(commit=True) as cursor:
+            try:
+                # Voegt veilig de kolom reistijd toe als die er nog niet in zit
+                cursor.execute("ALTER TABLE Mobility_log ADD COLUMN reistijd INTEGER DEFAULT 0")
+            except sqlite3.OperationalError:
+                # Kolom bestaat al, we hoeven niks te doen!
+                pass
+
+    def query_reistijd_per_vervoer(self):
+        """Analyseert en berekent de gemiddelde reistijd per vervoersmiddel."""
+        with self._get_cursor() as cursor:
+            cursor.execute("""
+                SELECT t.type, ROUND(AVG(m.reistijd), 1) as gem_reistijd
+                FROM Mobility_log m
+                JOIN Transport t ON m.transport_id = t.id
+                GROUP BY t.type
+                ORDER BY t.type ASC
+            """)
+            return cursor.fetchall()
+
+    def query_reistijd_per_klas(self):
+        """Analyseert en berekent de gemiddelde reistijd per klas."""
+        with self._get_cursor() as cursor:
+            cursor.execute("""
+                SELECT s.klas, ROUND(AVG(m.reistijd), 1) as gem_reistijd
+                FROM Mobility_log m
+                JOIN Students s ON m.student_id = s.id
+                GROUP BY s.klas
+                ORDER BY s.klas ASC
+            """)
+            return cursor.fetchall()
+
+    # =========================================================================
+    # ANALYTISCHE QUERIES VOOR DE GRAFIEKEN (AANWEZIGHEDEN)
     # =========================================================================
     def query_afwezigheden_per_klas(self):
         """Analyse 1: Telt het aantal 'Afwezig' registraties per klas."""
@@ -160,12 +198,12 @@ class DatabaseModel:
 
     def get_all_logs(self):
         with self._get_cursor() as cursor:
-            cursor.execute("SELECT id, student_id, transport_id, datum FROM Mobility_log")
+            cursor.execute("SELECT id, student_id, transport_id, datum, reistijd FROM Mobility_log")
             return cursor.fetchall()
 
-    def add_log(self, student_id, transport_id, datum):
+    def add_log(self, student_id, transport_id, datum, reistijd=0):
         with self._get_cursor(commit=True) as cursor:
-            cursor.execute("INSERT INTO Mobility_log (student_id, transport_id, datum) VALUES (?, ?, ?)", (student_id, transport_id, datum))
+            cursor.execute("INSERT INTO Mobility_log (student_id, transport_id, datum, reistijd) VALUES (?, ?, ?, ?)", (student_id, transport_id, datum, reistijd))
 
     def delete_log(self, log_id):
         with self._get_cursor(commit=True) as cursor:

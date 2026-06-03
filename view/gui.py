@@ -115,6 +115,55 @@ class AanwezigheidsAnalyseFrame(ttk.Frame):
 
 
 # ==========================================
+# NIEUWE SUB-FRAMES VOOR REISTIJDEN (In dezelfde stijl)
+# ==========================================
+class ReistijdAnalyseFrame(ttk.Frame):
+    def __init__(self, parent, main_view):
+        super().__init__(parent)
+        self.main_view = main_view
+        
+        # Splitter Layout (Links tabellen, Rechts grafiek)
+        main_splitter = ttk.PanedWindow(self, orient='horizontal')
+        main_splitter.pack(expand=True, fill='both', padx=5, pady=5)
+        
+        # Links: Data tabellen wrapper
+        left_frame = ttk.Frame(main_splitter)
+        main_splitter.add(left_frame, weight=1)
+        
+        tabel1_wrapper = ttk.LabelFrame(left_frame, text=" Gemiddelde Reistijd per Vervoersmiddel ", padding=5)
+        tabel1_wrapper.pack(expand=True, fill='both', padx=5, pady=5)
+        
+        headers_vervoer = ("Vervoersmiddel", "Gem. Reistijd (min)")
+        self.tree_reistijd_vervoer = ttk.Treeview(tabel1_wrapper, columns=headers_vervoer, show="headings")
+        for h in headers_vervoer:
+            self.tree_reistijd_vervoer.heading(h, text=h)
+            self.tree_reistijd_vervoer.column(h, anchor="center", width=120)
+        self.tree_reistijd_vervoer.pack(expand=True, fill='both')
+        
+        tabel2_wrapper = ttk.LabelFrame(left_frame, text=" Klassen & Reistijden ", padding=5)
+        tabel2_wrapper.pack(expand=True, fill='both', padx=5, pady=5)
+        
+        headers_klas = ("Klas", "Reistijd (min)")
+        self.tree_reistijd_klas = ttk.Treeview(tabel2_wrapper, columns=headers_klas, show="headings")
+        for h in headers_klas:
+            self.tree_reistijd_klas.heading(h, text=h)
+            self.tree_reistijd_klas.column(h, anchor="center", width=120)
+        self.tree_reistijd_klas.pack(expand=True, fill='both')
+        
+        # Rechts: De Grafiek + Wisselknop
+        grafiek_wrapper = ttk.LabelFrame(main_splitter, text=" Visuele Weergave Reistijden ", padding=10)
+        main_splitter.add(grafiek_wrapper, weight=1)
+        
+        self.btn_toggle_reistijd = ttk.Button(grafiek_wrapper, text=" Wissel naar Cirkeldiagram ", command=lambda: self.main_view.toggle_grafiek('reistijd'))
+        self.btn_toggle_reistijd.pack(anchor='ne', pady=(0, 5))
+        
+        self.canvas_reistijd = tk.Canvas(grafiek_wrapper, bg="white", highlightthickness=0)
+        self.canvas_reistijd.pack(expand=True, fill='both')
+        
+        self.bind("<Visibility>", lambda e: self.main_view.controller.update_reistijd_analyse() if self.main_view.controller else None)
+
+
+# ==========================================
 # HOOFD INTERFACE (MainView)
 # ==========================================
 class MainView(tk.Tk):
@@ -124,7 +173,7 @@ class MainView(tk.Tk):
         self.geometry("1100x850") 
         self.controller = None
         
-        # Geheugen voor de status van de grafieken (AANGEVULD MET AANWEZIGHED)
+        # Geheugen voor de status van de grafieken (AANGEVULD MET AANWEZIGHED & REISTIJD)
         self.chart_states = {
             'vervoer': {'type': 'pie', 'data': {}, 'titel': ""},
             'afstand': {'type': 'bar', 'data': {}, 'titel': ""},
@@ -132,7 +181,8 @@ class MainView(tk.Tk):
             'categorie': {'type': 'pie', 'data': {}, 'titel': ""},
             'co2': {'type': 'bar', 'data': {}, 'titel': ""},
             'gezondheid': {'type': 'pie', 'data': {}, 'titel': ""},
-            'aanwezigheid': {'type': 'bar', 'data': {}, 'titel': ""} # <-- NIEUW
+            'aanwezigheid': {'type': 'bar', 'data': {}, 'titel': ""},
+            'reistijd': {'type': 'bar', 'data': {}, 'titel': ""} # <-- NIEUW
         }
 
         # 1. Clean, High-Contrast Light Styling Configuration
@@ -243,6 +293,7 @@ class MainView(tk.Tk):
         self.co2_analyse_frame = CO2AnalyseFrame(self.dashboard_notebook, self)
         self.tab_gezondheid_analyse = GezondheidAnalyseFrame(self.dashboard_notebook, self)
         self.aanwezigheid_analyse_frame = AanwezigheidsAnalyseFrame(self.dashboard_notebook, self) # <-- NIEUW
+        self.reistijd_analyse_frame = ReistijdAnalyseFrame(self.dashboard_notebook, self) # <-- NIEUW
 
         self.dashboard_notebook.add(self.overzicht_frame, text='Overzicht Data')
         self.dashboard_notebook.add(self.vervoer_analyse_frame, text='Vervoersmiddelen')
@@ -252,6 +303,7 @@ class MainView(tk.Tk):
         self.dashboard_notebook.add(self.co2_analyse_frame, text='CO₂ Analyse (Uitbreiding)')
         self.dashboard_notebook.add(self.tab_gezondheid_analyse, text='Gezondheidsindex')
         self.dashboard_notebook.add(self.aanwezigheid_analyse_frame, text='Aanwezigheidsanalyse (Nieuw)') # <-- NIEUW
+        self.dashboard_notebook.add(self.reistijd_analyse_frame, text='Reistijd Analyse (Nieuw)') # <-- NIEUW
 
     def _map_sub_properties(self):
         """Mapt alle sub-component eigenschappen direct op self om controller.py intact te houden."""
@@ -271,7 +323,7 @@ class MainView(tk.Tk):
         self.entry_datum = self.logs_frame.entry_datum
         self.tree_logs = self.logs_frame.tree_logs
 
-        # NIEUW: Aanwezigheden Beheer Mappings
+        # Aanwezigheden Beheer Mappings
         self.tree_aanw = self.aanwezigheid_beheer_frame.tree_aanw
 
         # Dashboard Overzicht
@@ -312,9 +364,15 @@ class MainView(tk.Tk):
         self.btn_toggle_gezondheid = self.tab_gezondheid_analyse.btn_toggle_gezondheid
         self.canvas_gezondheid = self.tab_gezondheid_analyse.canvas_gezondheid
 
-        # NIEUW: Aanwezigheid Analyse Mappings
+        # Aanwezigheid Analyse Mappings
         self.btn_toggle_aanwezigheid = self.aanwezigheid_analyse_frame.btn_toggle_aanwezigheid
         self.canvas_aanwezigheid = self.aanwezigheid_analyse_frame.canvas_aanwezigheid
+
+        # Reistijd Analyse Mappings <-- NIEUW
+        self.tree_reistijd_vervoer = self.reistijd_analyse_frame.tree_reistijd_vervoer
+        self.tree_reistijd_klas = self.reistijd_analyse_frame.tree_reistijd_klas
+        self.btn_toggle_reistijd = self.reistijd_analyse_frame.btn_toggle_reistijd
+        self.canvas_reistijd = self.reistijd_analyse_frame.canvas_reistijd
 
 
     # ==========================================

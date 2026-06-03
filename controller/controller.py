@@ -100,7 +100,7 @@ class Controller:
             
         self.view.populate_tree(self.view.tree_vervoer_stat, vervoer_rows)
         self.view.update_grafiek('vervoer', vervoer_grafiek_data, "Procentuele Verdeling per Vervoersmiddel")
-
+        
         # 3. Afstand Analyse
         totale_afstand_all = sum(s[3] for s in studenten)
         gem_afstand_all = round(totale_afstand_all / len(studenten), 2) if studenten else 0
@@ -371,6 +371,26 @@ class Controller:
 
         self.view.populate_tree(tree_analyse, data)
         self.view.update_grafiek('aanwezigheid', chart_data, titel)
+
+    # --- NIEUW: REISTIJD ANALYSE UITBREIDING (In jouw eigen query-stijl) ---
+    def update_reistijd_analyse(self):
+        """Uitbreiding 3: Genereert de statistische reistijdtabellen en bijbehorende grafiek."""
+        try:
+            # Vraag de data op via de query-functies in het Model
+            data_vervoer = self.model.query_reistijd_per_vervoer()
+            data_klas = self.model.query_reistijd_per_klas()
+            
+            # Vul de twee specifieke treeviews in het reistijd-frame
+            self.view.populate_tree(self.view.tree_reistijd_vervoer, data_vervoer)
+            self.view.populate_tree(self.view.tree_reistijd_klas, data_klas)
+            
+            # Formatteer de data voor de grafiek (gemiddelde reistijd per vervoersmiddel)
+            chart_data = {str(row[0]): row[1] for row in data_vervoer}
+            
+            # Update de grafiek via het universele canvas
+            self.view.update_grafiek('reistijd', chart_data, "Gemiddelde Reistijd per Vervoersmiddel (min)")
+        except Exception as e:
+            print(f"Opmerking: Reistijd tabellen nog leeg of fout bij laden: {e}")
 
     # --- Standaard CRUD Acties ---
     def add_student(self):
