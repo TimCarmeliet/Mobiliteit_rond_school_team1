@@ -48,29 +48,29 @@ class DatabaseModel:
     # UITBREIDING 2: AANWEZIGHEDEN EN AFWEZIGHEDEN (CRUD)
     # =========================================================================
     def setup_aanwezigheden_uitbreiding(self):
-        """Maakt de nieuwe Aanwezigheden tabel aan conform de restricties."""
+        """Maakt de nieuwe aanwezigheden tabel aan conform de restricties."""
         with self._get_cursor(commit=True) as cursor:
-            cursor.execute('''CREATE TABLE IF NOT EXISTS Aanwezigheden (
+            cursor.execute('''CREATE TABLE IF NOT EXISTS aanwezigheden (
                                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                                 student_id INTEGER NOT NULL,
                                 datum TEXT NOT NULL,
-                                status TEXT NOT NULL CHECK(status IN ('Aanwezig', 'Afwezig', 'Te laat')),
+                                status TEXT NOT NULL CHECK(status IN ('aanwezig', 'afwezig', 'te laat')),
                                 FOREIGN KEY (student_id) REFERENCES Students(id) ON DELETE CASCADE)''')
 
     def add_aanwezigheid(self, student_id, datum, status):
         """Slaat een nieuwe aanwezigheid of afwezigheid op via de contextmanager."""
         with self._get_cursor(commit=True) as cursor:
             cursor.execute("""
-                INSERT INTO Aanwezigheden (student_id, datum, status) 
+                INSERT INTO aanwezigheden (student_id, datum, status) 
                 VALUES (?, ?, ?)
-            """, (student_id, datum, status))
+            """, (student_id, datum, status.lower()))
 
     def get_all_aanwezigheden(self):
         """Haalt alle registraties op gekoppeld aan ID en Naam voor de interface."""
         with self._get_cursor() as cursor:
             cursor.execute("""
                 SELECT a.id, s.id || ' - ' || s.naam, a.datum, a.status 
-                FROM Aanwezigheden a
+                FROM aanwezigheden a
                 JOIN Students s ON a.student_id = s.id
                 ORDER BY a.datum DESC, s.naam ASC
             """)
@@ -79,13 +79,13 @@ class DatabaseModel:
     def delete_aanwezigheid(self, aanw_id):
         """Verwijdert een specifieke aanwezigheidsregistratie."""
         with self._get_cursor(commit=True) as cursor:
-            cursor.execute("DELETE FROM Aanwezigheden WHERE id = ?", (aanw_id,))
+            cursor.execute("DELETE FROM aanwezigheden WHERE id = ?", (aanw_id,))
 
     # =========================================================================
     # UITBREIDING 3: REISTIJD ANALYSE SETUP & QUERIES
     # =========================================================================
     def setup_reistijd_uitbreiding(self):
-        """Zorgt ervoor dat de tabel Mobility_log een kolom 'reistijd' heeft (indien nog niet aanwezig)."""
+        """Zorgt ervoor dat de tabel Mobility_log een kolom 'reistijd' heeft en berekent deze."""
         with self._get_cursor(commit=True) as cursor:
             try:
                 # Voegt veilig de kolom reistijd toe als die er nog niet in zit
@@ -93,6 +93,40 @@ class DatabaseModel:
             except sqlite3.OperationalError:
                 # Kolom bestaat al, we hoeven niks te doen!
                 pass
+        
+        # FIX: Bereken en vul direct de lege vakjes voor de ritten die er al in staan!
+        self.reken_en_fix_bestaande_reistijden()
+
+    def reken_en_fix_bestaande_reistijden(self):
+        """Berekent met terugwerkende kracht de reistijd voor alle lege/0 records."""
+        studenten = self.get_all_students()
+        transports = self.get_all_transports()
+        
+        stud_afstand = {s[0]: float(s[3]) for s in studenten}
+        trans_snelheid = {}
+        snelheids_mapping = {'fiets': 15.0, 'bus': 30.0, 'auto': 45.0, 'te voet': 5.0}
+        
+        for t in transports:
+            t_id = t[0]
+            t_type = str(t[1]).lower().strip()
+            trans_snelheid[t_id] = snelheids_mapping.get(t_type, 20.0) # 20 km/u als fallback
+            
+        with self._get_cursor(commit=True) as cursor:
+            # Haal alle logs op waar de reistijd nog 0 of onbekend is
+            cursor.execute("SELECT id, student_id, transport_id FROM Mobility_log WHERE reistijd = 0 OR reistijd IS NULL")
+            logs_to_fix = cursor.fetchall()
+            
+            for log in logs_to_fix:
+                log_id, s_id, t_id = log
+                afstand = stud_afstand.get(s_id, 0.0)
+                snelheid = trans_snelheid.get(t_id, 20.0)
+                
+                if snelheid > 0:
+                    berekende_tijd = round((afstand / snelheid) * 60)
+                else:
+                    berekende_tijd = 0
+                    
+                cursor.execute("UPDATE Mobility_log SET reistijd = ? WHERE id = ?", (berekende_tijd, log_id))
 
     def query_reistijd_per_vervoer(self):
         """Analyseert en berekent de gemiddelde reistijd per vervoersmiddel."""
@@ -115,49 +149,6 @@ class DatabaseModel:
                 JOIN Students s ON m.student_id = s.id
                 GROUP BY s.klas
                 ORDER BY s.klas ASC
-            """)
-            return cursor.fetchall()
-
-    # =========================================================================
-    # ANALYTISCHE QUERIES VOOR DE GRAFIEKEN (AANWEZIGHEDEN)
-    # =========================================================================
-    def query_afwezigheden_per_klas(self):
-        """Analyse 1: Telt het aantal 'Afwezig' registraties per klas."""
-        with self._get_cursor() as cursor:
-            cursor.execute("""
-                SELECT s.klas, COUNT(a.id) as aantal_afwezig
-                FROM Students s
-                JOIN Aanwezigheden a ON s.id = a.student_id
-                WHERE a.status = 'Afwezig'
-                GROUP BY s.klas
-                ORDER BY s.klas ASC
-            """)
-            return cursor.fetchall()
-
-    def query_percentage_aanwezig_per_klas(self):
-        """Analyse 2: Berekent de procentuele aanwezigheidsscore per klas."""
-        with self._get_cursor() as cursor:
-            cursor.execute("""
-                SELECT s.klas, 
-                       ROUND(COUNT(CASE WHEN a.status = 'Aanwezig' THEN 1 END) * 100.0 / COUNT(a.id), 1)
-                FROM Students s
-                JOIN Aanwezigheden a ON s.id = a.student_id
-                GROUP BY s.klas
-                ORDER BY s.klas ASC
-            """)
-            return cursor.fetchall()
-
-    def query_vervoer_vs_aanwezigheid(self):
-        """Analyse 3: Combineert de verplaatsingslogs met de aanwezigheid op dezelfde dag."""
-        with self._get_cursor() as cursor:
-            cursor.execute("""
-                SELECT t.type, a.status, COUNT(a.id) as aantal
-                FROM Aanwezigheden a
-                JOIN Students s ON a.student_id = s.id
-                JOIN Mobility_log m ON m.student_id = s.id AND m.datum = a.datum
-                JOIN Transport t ON m.transport_id = t.id
-                GROUP BY t.type, a.status
-                ORDER BY t.type ASC, a.status ASC
             """)
             return cursor.fetchall()
 

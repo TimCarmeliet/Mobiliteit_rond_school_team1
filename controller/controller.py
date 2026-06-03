@@ -100,7 +100,7 @@ class Controller:
             
         self.view.populate_tree(self.view.tree_vervoer_stat, vervoer_rows)
         self.view.update_grafiek('vervoer', vervoer_grafiek_data, "Procentuele Verdeling per Vervoersmiddel")
-        
+
         # 3. Afstand Analyse
         totale_afstand_all = sum(s[3] for s in studenten)
         gem_afstand_all = round(totale_afstand_all / len(studenten), 2) if studenten else 0
@@ -372,7 +372,7 @@ class Controller:
         self.view.populate_tree(tree_analyse, data)
         self.view.update_grafiek('aanwezigheid', chart_data, titel)
 
-    # --- NIEUW: REISTIJD ANALYSE UITBREIDING (In jouw eigen query-stijl) ---
+    # --- REISTIJD ANALYSE UITBREIDING ---
     def update_reistijd_analyse(self):
         """Uitbreiding 3: Genereert de statistische reistijdtabellen en bijbehorende grafiek."""
         try:
