@@ -45,7 +45,7 @@ class DatabaseModel:
             return cursor.fetchall()
 
     # =========================================================================
-    # UITBREIDING 2: AANWEZIGHEDEN EN AFWEZIGHEDEN (CRUD)
+    # UITBREIDING 2: AANWEZIGHEDEN EN AFWEZIGHEDEN (CRUD & ANALYSES)
     # =========================================================================
     def setup_aanwezigheden_uitbreiding(self):
         """Maakt de nieuwe aanwezigheden tabel aan conform de restricties."""
@@ -80,6 +80,49 @@ class DatabaseModel:
         """Verwijdert een specifieke aanwezigheidsregistratie."""
         with self._get_cursor(commit=True) as cursor:
             cursor.execute("DELETE FROM aanwezigheden WHERE id = ?", (aanw_id,))
+
+    def query_afwezigheden_per_klas(self):
+        """Berekening 1: Telt het aantal 'afwezig' registraties per klas."""
+        with self._get_cursor() as cursor:
+            cursor.execute("""
+                SELECT s.klas, COUNT(a.id) as aantal_afwezig
+                FROM aanwezigheden a
+                JOIN Students s ON a.student_id = s.id
+                WHERE a.status = 'afwezig'
+                GROUP BY s.klas
+                ORDER BY s.klas ASC
+            """)
+            return cursor.fetchall()
+
+    def query_percentage_aanwezig_per_klas(self):
+        """Berekening 3: Berekent het procentuele aanwezigheidsscore per klas."""
+        with self._get_cursor() as cursor:
+            cursor.execute("""
+                SELECT 
+                    s.klas,
+                    ROUND(
+                        (SUM(CASE WHEN a.status = 'aanwezig' THEN 1.0 ELSE 0.0 END) / COUNT(a.id)) * 100, 
+                        1
+                    ) as percentage_aanwezig
+                FROM aanwezigheden a
+                JOIN Students s ON a.student_id = s.id
+                GROUP BY s.klas
+                ORDER BY s.klas ASC
+            """)
+            return cursor.fetchall()
+
+    def query_vervoer_vs_aanwezigheid(self):
+        """Berekening 2: Combineert de verplaatsingslogs met de aanwezigheid op dezelfde dag."""
+        with self._get_cursor() as cursor:
+            cursor.execute("""
+                SELECT t.type as vervoermiddel, a.status, COUNT(a.id) as aantal
+                FROM aanwezigheden a
+                JOIN Mobility_log m ON a.student_id = m.student_id AND a.datum = m.datum
+                JOIN Transport t ON m.transport_id = t.id
+                GROUP BY t.type, a.status
+                ORDER BY t.type ASC, a.status ASC
+            """)
+            return cursor.fetchall()
 
     # =========================================================================
     # UITBREIDING 3: REISTIJD ANALYSE SETUP & QUERIES
@@ -193,8 +236,30 @@ class DatabaseModel:
             return cursor.fetchall()
 
     def add_log(self, student_id, transport_id, datum, reistijd=0):
+        """Voegt een log toe en berekent automatisch de reistijd op basis van de snelheid (indien reistijd=0)."""
+        if reistijd == 0:
+            with self._get_cursor() as cursor:
+                # Haal afstand van student op
+                cursor.execute("SELECT afstand FROM Students WHERE id = ?", (student_id,))
+                res_stud = cursor.fetchone()
+                afstand = float(res_stud[0]) if res_stud else 0.0
+                
+                # Haal type van transport op
+                cursor.execute("SELECT type FROM Transport WHERE id = ?", (transport_id,))
+                res_trans = cursor.fetchone()
+                t_type = str(res_trans[0]).lower().strip() if res_trans else ""
+            
+            snelheids_mapping = {'fiets': 15.0, 'bus': 30.0, 'auto': 45.0, 'te voet': 5.0}
+            snelheid = snelheids_mapping.get(t_type, 20.0)
+            
+            if snelheid > 0:
+                reistijd = round((afstand / snelheid) * 60)
+
         with self._get_cursor(commit=True) as cursor:
-            cursor.execute("INSERT INTO Mobility_log (student_id, transport_id, datum, reistijd) VALUES (?, ?, ?, ?)", (student_id, transport_id, datum, reistijd))
+            cursor.execute("""
+                INSERT INTO Mobility_log (student_id, transport_id, datum, reistijd) 
+                VALUES (?, ?, ?, ?)
+            """, (student_id, transport_id, datum, reistijd))
 
     def delete_log(self, log_id):
         with self._get_cursor(commit=True) as cursor:

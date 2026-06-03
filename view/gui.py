@@ -10,7 +10,7 @@ from view.dashboard_frames import (
 import view.charts as charts
 
 # ==========================================
-# NIEUWE SUB-FRAMES VOOR AANWEZIGHEDEN (In dezelfde stijl)
+#  SUB-FRAMES VOOR AANWEZIGHEDEN 
 # ==========================================
 class AanwezighedenBeheerFrame(ttk.Frame):
     def __init__(self, parent, main_view):
@@ -115,7 +115,7 @@ class AanwezigheidsAnalyseFrame(ttk.Frame):
 
 
 # ==========================================
-# NIEUWE SUB-FRAMES VOOR REISTIJDEN (In dezelfde stijl)
+#  SUB-FRAMES VOOR REISTIJDEN 
 # ==========================================
 class ReistijdAnalyseFrame(ttk.Frame):
     def __init__(self, parent, main_view):
