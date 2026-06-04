@@ -387,3 +387,98 @@ class GezondheidAnalyseFrame(ttk.Frame):
 
         self.canvas_gezondheid = tk.Canvas(chart_card, bg='white', bd=1, highlightthickness=0, relief="solid")
         self.canvas_gezondheid.pack(fill='both', expand=True, padx=10, pady=(5, 10))
+
+
+class LoggingAnalyseFrame(ttk.Frame):
+    """
+    Dashboard-tab: Logging Analyse (Uitbreiding 3 — Gebruikersacties Audit Trail).
+
+    Dit tabblad visualiseert het gebruik van de applicatie zelf:
+      • Hoeveel acties heeft elke gebruiker uitgevoerd?
+      • Welke actie-types komen het meest voor (login, create, update, delete)?
+      • Wie is de meest actieve gebruiker?
+
+    Links staan drie compacte Treeview-tabellen, rechts een grafiek
+    die de verdeling per actietype toont als cirkel- of staafdiagram.
+    """
+
+    def __init__(self, parent, view):
+        super().__init__(parent)
+        self.view = view
+
+        # ── Linkerzijde: Drie analyse-tabellen onder elkaar ──
+        main_frame = ttk.Frame(self)
+        main_frame.pack(fill='both', expand=True, padx=10, pady=10)
+        main_frame.columnconfigure(0, weight=4)
+        main_frame.columnconfigure(1, weight=6)
+        main_frame.rowconfigure(0, weight=1)
+
+        left_frame = ttk.Frame(main_frame)
+        left_frame.grid(row=0, column=0, padx=(0, 5), sticky='nsew')
+
+        # Tabel 1: Acties per Gebruiker
+        card1 = ttk.LabelFrame(left_frame, text="Acties per Gebruiker")
+        card1.pack(fill='x', padx=5, pady=(0, 5))
+
+        tf1 = ttk.Frame(card1)
+        tf1.pack(fill='x', padx=5, pady=5)
+
+        self.tree_logging_user = ttk.Treeview(tf1, columns=("Gebruiker", "Aantal Acties"), show="headings", height=3)
+        self.tree_logging_user.heading("Gebruiker", text="Gebruiker")
+        self.tree_logging_user.heading("Aantal Acties", text="Aantal Acties")
+        self.tree_logging_user.column("Gebruiker", anchor="center", width=120)
+        self.tree_logging_user.column("Aantal Acties", anchor="center", width=100)
+        self.tree_logging_user.pack(side='left', fill='both', expand=True)
+
+        sb1 = ttk.Scrollbar(tf1, orient="vertical", command=self.tree_logging_user.yview)
+        self.tree_logging_user.configure(yscrollcommand=sb1.set)
+        sb1.pack(side='right', fill='y')
+
+        # Tabel 2: Acties per Type
+        card2 = ttk.LabelFrame(left_frame, text="Acties per Type")
+        card2.pack(fill='x', padx=5, pady=5)
+
+        tf2 = ttk.Frame(card2)
+        tf2.pack(fill='x', padx=5, pady=5)
+
+        self.tree_logging_type = ttk.Treeview(tf2, columns=("Actietype", "Aantal"), show="headings", height=3)
+        self.tree_logging_type.heading("Actietype", text="Actietype")
+        self.tree_logging_type.heading("Aantal", text="Aantal")
+        self.tree_logging_type.column("Actietype", anchor="center", width=120)
+        self.tree_logging_type.column("Aantal", anchor="center", width=100)
+        self.tree_logging_type.pack(side='left', fill='both', expand=True)
+
+        sb2 = ttk.Scrollbar(tf2, orient="vertical", command=self.tree_logging_type.yview)
+        self.tree_logging_type.configure(yscrollcommand=sb2.set)
+        sb2.pack(side='right', fill='y')
+
+        # Tabel 3: Meest Actieve Gebruiker(s)
+        card3 = ttk.LabelFrame(left_frame, text="🏆 Meest Actieve Gebruiker(s)")
+        card3.pack(fill='x', padx=5, pady=(5, 0))
+
+        tf3 = ttk.Frame(card3)
+        tf3.pack(fill='x', padx=5, pady=5)
+
+        self.tree_logging_actief = ttk.Treeview(tf3, columns=("Gebruiker", "Aantal Acties"), show="headings", height=2)
+        self.tree_logging_actief.heading("Gebruiker", text="Gebruiker")
+        self.tree_logging_actief.heading("Aantal Acties", text="Aantal Acties")
+        self.tree_logging_actief.column("Gebruiker", anchor="center", width=120)
+        self.tree_logging_actief.column("Aantal Acties", anchor="center", width=100)
+        self.tree_logging_actief.pack(side='left', fill='both', expand=True)
+
+        sb3 = ttk.Scrollbar(tf3, orient="vertical", command=self.tree_logging_actief.yview)
+        self.tree_logging_actief.configure(yscrollcommand=sb3.set)
+        sb3.pack(side='right', fill='y')
+
+        # ── Rechterzijde: Grafiek met wisselknop ──
+        right_card = ttk.LabelFrame(main_frame, text="Visuele Logging Analyse")
+        right_card.grid(row=0, column=1, padx=(5, 0), sticky='nsew')
+
+        btn_frame = ttk.Frame(right_card)
+        btn_frame.pack(fill='x', padx=10, pady=(5, 0))
+        self.btn_toggle_logging = ttk.Button(btn_frame, text="Wissel Grafiektype", command=lambda: self.view.toggle_grafiek('logging'))
+        self.btn_toggle_logging.pack(side='right')
+
+        self.canvas_logging = tk.Canvas(right_card, bg='white', bd=1, highlightthickness=0, relief="solid")
+        self.canvas_logging.pack(fill='both', expand=True, padx=10, pady=(5, 10))
+

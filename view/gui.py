@@ -28,7 +28,8 @@ from tkinter import ttk, messagebox
 from view.beheer_frames import StudentenBeheerFrame, VervoersmiddelenFrame, VerplaatsingenFrame
 from view.dashboard_frames import (
     OverzichtDataFrame, VervoersmiddelenAnalyseFrame, AfstandAnalyseFrame,
-    KlassenAnalyseFrame, CategorieAnalyseFrame, CO2AnalyseFrame, GezondheidAnalyseFrame
+    KlassenAnalyseFrame, CategorieAnalyseFrame, CO2AnalyseFrame, GezondheidAnalyseFrame,
+    LoggingAnalyseFrame
 )
 import view.charts as charts
 
@@ -65,7 +66,8 @@ class MainView(tk.Tk):
             'klassen': {'type': 'bar', 'data': {}, 'titel': ""},
             'categorie': {'type': 'pie', 'data': {}, 'titel': ""},
             'co2': {'type': 'bar', 'data': {}, 'titel': ""},
-            'gezondheid': {'type': 'pie', 'data': {}, 'titel': ""}
+            'gezondheid': {'type': 'pie', 'data': {}, 'titel': ""},
+            'logging': {'type': 'pie', 'data': {}, 'titel': ""}
         }
 
         # =====================================================================
@@ -283,6 +285,7 @@ class MainView(tk.Tk):
         self.categorie_analyse_frame = CategorieAnalyseFrame(self.dashboard_notebook, self)
         self.co2_analyse_frame = CO2AnalyseFrame(self.dashboard_notebook, self)
         self.tab_gezondheid_analyse = GezondheidAnalyseFrame(self.dashboard_notebook, self)
+        self.logging_analyse_frame = LoggingAnalyseFrame(self.dashboard_notebook, self)
 
         # Toevoegen aan sub-notebook
         self.dashboard_notebook.add(self.overzicht_frame, text='Overzicht Data')
@@ -292,6 +295,7 @@ class MainView(tk.Tk):
         self.dashboard_notebook.add(self.categorie_analyse_frame, text='Afstandscategorieën (Extra)')
         self.dashboard_notebook.add(self.co2_analyse_frame, text='CO₂ Analyse (Uitbreiding)')
         self.dashboard_notebook.add(self.tab_gezondheid_analyse, text='Gezondheidsindex')
+        self.dashboard_notebook.add(self.logging_analyse_frame, text='Logging Analyse')
 
     def _map_sub_properties(self):
         """Mapt alle sub-component eigenschappen direct op self om controller.py intact te houden.
@@ -359,6 +363,13 @@ class MainView(tk.Tk):
         self.tree_gezondheid_stat = self.tab_gezondheid_analyse.tree_gezondheid_stat
         self.btn_toggle_gezondheid = self.tab_gezondheid_analyse.btn_toggle_gezondheid
         self.canvas_gezondheid = self.tab_gezondheid_analyse.canvas_gezondheid
+
+        # Logging Analyse Mappings
+        self.tree_logging_user = self.logging_analyse_frame.tree_logging_user
+        self.tree_logging_type = self.logging_analyse_frame.tree_logging_type
+        self.tree_logging_actief = self.logging_analyse_frame.tree_logging_actief
+        self.btn_toggle_logging = self.logging_analyse_frame.btn_toggle_logging
+        self.canvas_logging = self.logging_analyse_frame.canvas_logging
 
 
     # =========================================================================

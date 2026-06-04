@@ -195,3 +195,48 @@ class DatabaseModel:
         """Verwijdert één specifieke verplaatsingsregistratie."""
         with self._get_cursor(commit=True) as cursor:
             cursor.execute("DELETE FROM Mobility_log WHERE id = ?", (log_id,))
+
+    # =========================================================================
+    # UITBREIDING 3: Action Logging
+    # Deze tabel slaat een audit-trail op van alle gebruikersacties in de
+    # applicatie. Elke keer dat een gebruiker een CRUD-operatie uitvoert
+    # (of inlogt), wordt dit geregistreerd met een tijdstempel.
+    # =========================================================================
+    def setup_logging_table(self):
+        """Maakt de Action_Logs tabel aan als die nog niet bestaat.
+        
+        Kolommen:
+          id           — unieke primaire sleutel (auto-increment)
+          user_id      — de naam/ID van de ingelogde gebruiker
+          action_type  — het type actie (bijv. 'login', 'create', 'update', 'delete')
+          timestamp    — datum en tijdstip van de actie (ISO 8601 formaat)
+        """
+        with self._get_cursor(commit=True) as cursor:
+            cursor.execute('''CREATE TABLE IF NOT EXISTS Action_Logs (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                user_id TEXT NOT NULL,
+                                action_type TEXT NOT NULL,
+                                timestamp TEXT NOT NULL)''')
+
+    def add_action_log(self, user_id, action_type, timestamp):
+        """Registreert een nieuwe gebruikersactie in de Action_Logs tabel.
+        
+        Parameters:
+          user_id     — wie voerde de actie uit (bijv. 'Jan')
+          action_type — wat werd er gedaan (bijv. 'create', 'delete', 'login')
+          timestamp   — wanneer (bijv. '2025-06-04 09:15:23')
+        """
+        with self._get_cursor(commit=True) as cursor:
+            cursor.execute(
+                "INSERT INTO Action_Logs (user_id, action_type, timestamp) VALUES (?, ?, ?)",
+                (user_id, action_type, timestamp)
+            )
+
+    def get_all_action_logs(self):
+        """Haalt alle geregistreerde acties op, gesorteerd van nieuwste naar oudste.
+        
+        Retourneert: [(id, user_id, action_type, timestamp), ...]
+        """
+        with self._get_cursor() as cursor:
+            cursor.execute("SELECT id, user_id, action_type, timestamp FROM Action_Logs ORDER BY id DESC")
+            return cursor.fetchall()

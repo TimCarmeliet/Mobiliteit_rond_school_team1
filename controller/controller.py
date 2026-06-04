@@ -17,6 +17,9 @@ dictionaries. Dit heeft twee voordelen:
     die in SQL onnodig complex zouden worden.
 """
 
+from datetime import datetime
+from tkinter import simpledialog
+
 class Controller:
     """
     De hoofdcoördinator van de MVC-applicatie.
@@ -32,6 +35,26 @@ class Controller:
         # Verbind de Controller met de View zodat UI-knoppen
         # via self.view.controller.methode() acties kunnen aanroepen
         self.view.set_controller(self)
+
+        # =====================================================================
+        # UITBREIDING 3: Action Logging — Gebruikersidentificatie bij opstart
+        # Bij het opstarten wordt de gebruiker gevraagd om zijn/haar naam
+        # in te voeren via een popup-dialoog (simpledialog). Deze naam wordt
+        # bij elke CRUD-actie meegegeven aan de Action_Logs tabel.
+        # =====================================================================
+        self.model.setup_logging_table()
+        self.current_user = simpledialog.askstring(
+            "Inloggen",
+            "Voer je gebruikersnaam in:",
+            parent=self.view
+        )
+        # Als de gebruiker op 'Annuleren' klikt, geven we een standaardnaam
+        if not self.current_user:
+            self.current_user = "Onbekend"
+
+        # Registreer de login-actie met het huidige tijdstip
+        self._log_action("login")
+
         # Vul meteen alle schermen met actuele data bij het opstarten
         self.refresh_all_tables()
 
@@ -87,6 +110,9 @@ class Controller:
             
         self.update_co2_analyse()
         self.update_gezondheid_analyse(studenten, transports, logs)
+
+        # 7. --- UITBREIDING 3: Logging Analyse ---
+        self.update_logging_analyse()
 
     def laad_overzicht_tabel(self):
         """Laadt de ruwe databasetabel gekozen in het dashboard tabblad.
@@ -380,6 +406,7 @@ class Controller:
         if not all(data.values()): return self.view.show_error("Vul alles in!")
         try:
             self.model.add_student(data['naam'], data['klas'], float(data['afstand'].replace(',', '.')))
+            self._log_action("create")
             self.view.clear_student_form()
             self.refresh_all_tables()
             self.view.show_info("Student toegevoegd.")
@@ -393,6 +420,7 @@ class Controller:
         if not all(data.values()): return self.view.show_error("Vul alles in!")
         try:
             self.model.update_student(student_id, data['naam'], data['klas'], float(data['afstand'].replace(',', '.')))
+            self._log_action("update")
             self.view.clear_student_form()
             self.refresh_all_tables()
             self.view.show_info("Student aangepast.")
@@ -403,6 +431,7 @@ class Controller:
         student_id = self.view.get_selected_id(self.view.tree_students)
         if not student_id: return self.view.show_error("Selecteer een student.")
         self.model.delete_student(student_id)
+        self._log_action("delete")
         self.view.clear_student_form()
         self.refresh_all_tables()
         self.view.show_info("Student en bijbehorende logs verwijderd.")
@@ -412,6 +441,7 @@ class Controller:
         type_vervoer = self.view.entry_vervoer_type.get()
         if not type_vervoer: return self.view.show_error("Vul een type in.")
         self.model.add_transport(type_vervoer)
+        self._log_action("create")
         self.view.entry_vervoer_type.delete(0, 'end')
         self.refresh_all_tables()
         self.view.show_info("Vervoer toegevoegd.")
@@ -421,6 +451,7 @@ class Controller:
         trans_id = self.view.get_selected_id(self.view.tree_trans)
         if not trans_id: return self.view.show_error("Selecteer vervoer.")
         self.model.delete_transport(trans_id)
+        self._log_action("delete")
         self.refresh_all_tables()
         self.view.show_info("Vervoer en bijbehorende logs verwijderd.")
 
@@ -442,6 +473,7 @@ class Controller:
         vervoer_id = int(vervoer_val.split(" - ")[0])
 
         self.model.add_log(student_id, vervoer_id, datum)
+        self._log_action("create")
         self.view.entry_datum.delete(0, 'end')
         self.refresh_all_tables()
         self.view.show_info("Verplaatsing opgeslagen.")
@@ -451,6 +483,7 @@ class Controller:
         log_id = self.view.get_selected_id(self.view.tree_logs)
         if not log_id: return self.view.show_error("Selecteer een log.")
         self.model.delete_log(log_id)
+        self._log_action("delete")
         self.refresh_all_tables()
         self.view.show_info("Log verwijderd.")
 
@@ -525,6 +558,73 @@ class Controller:
             {'pie': pie_data, 'bar': bar_data}, 
             "Gezondheidsindex (Actief vs. Passief)"
         )
+
+    # =========================================================================
+    # UITBREIDING 3: Action Logging — Helper en Analyse
+    #
+    # _log_action():  Slaat een actie op in de Action_Logs tabel.
+    # update_logging_analyse(): Berekent statistieken in pure Python:
+    #   - Aantal acties per gebruiker
+    #   - Aantal acties per type (login, create, update, delete)
+    #   - Meest actieve gebruiker(s)
+    # =========================================================================
+    def _log_action(self, action_type):
+        """Schrijft een actie-logregel weg naar de Action_Logs tabel.
+        
+        Wordt automatisch aangeroepen bij elke CRUD-operatie en bij login.
+        Gebruikt datetime.now() om het exacte tijdstip vast te leggen.
+        """
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.model.add_action_log(self.current_user, action_type, timestamp)
+
+    def update_logging_analyse(self):
+        """Uitbreiding 3: Berekent logging-statistieken in pure Python.
+        
+        Drie analyses:
+          1. Acties per gebruiker — wie heeft wat gedaan?
+          2. Acties per type — hoeveel creates vs. deletes?
+          3. Meest actieve gebruiker(s) — wie heeft de meeste acties?
+        """
+        action_logs = self.model.get_all_action_logs()
+
+        # ── Analyse 1: Acties per gebruiker ──
+        acties_per_user = {}
+        for log in action_logs:
+            user = log[1]
+            if user not in acties_per_user:
+                acties_per_user[user] = 0
+            acties_per_user[user] += 1
+
+        # ── Analyse 2: Acties per type ──
+        acties_per_type = {}
+        for log in action_logs:
+            a_type = log[2]
+            if a_type not in acties_per_type:
+                acties_per_type[a_type] = 0
+            acties_per_type[a_type] += 1
+
+        # ── Analyse 3: Meest actieve gebruiker(s) ──
+        if acties_per_user:
+            max_count = max(acties_per_user.values())
+            meest_actief = [user for user, count in acties_per_user.items() if count == max_count]
+        else:
+            max_count = 0
+            meest_actief = ["-"]
+
+        # ── Vul de tabel "Acties per Gebruiker" ──
+        user_rows = [(user, count) for user, count in acties_per_user.items()]
+        self.view.populate_tree(self.view.tree_logging_user, user_rows)
+
+        # ── Vul de tabel "Acties per Type" ──
+        type_rows = [(a_type, count) for a_type, count in acties_per_type.items()]
+        self.view.populate_tree(self.view.tree_logging_type, type_rows)
+
+        # ── Vul de tabel "Meest Actief" ──
+        actief_rows = [(user, acties_per_user.get(user, 0)) for user in meest_actief]
+        self.view.populate_tree(self.view.tree_logging_actief, actief_rows)
+
+        # ── Grafiek: Acties per type als cirkeldiagram ──
+        self.view.update_grafiek('logging', acties_per_type, "Verdeling Acties per Type")
 
     def start(self):
         """Start de Tkinter mainloop — het programma draait tot het venster sluit."""
