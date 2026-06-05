@@ -274,12 +274,12 @@ class MainView(tk.Tk):
         self.studenten_frame = StudentenBeheerFrame(self.beheer_notebook, self)
         self.vervoer_frame = VervoersmiddelenFrame(self.beheer_notebook, self)
         self.logs_frame = VerplaatsingenFrame(self.beheer_notebook, self)
-        self.aanwezigheid_beheer_frame = AanwezighedenBeheerFrame(self.beheer_notebook, self) # <-- NIEUW
+        self.aanwezigheid_beheer_frame = AanwezighedenBeheerFrame(self.beheer_notebook, self) 
 
         self.beheer_notebook.add(self.studenten_frame, text='Studenten Beheren')
         self.beheer_notebook.add(self.vervoer_frame, text='Vervoersmiddelen')
         self.beheer_notebook.add(self.logs_frame, text='Verplaatsingen (Logs)')
-        self.beheer_notebook.add(self.aanwezigheid_beheer_frame, text='Aanwezigheden Beheren (Nieuw)') # <-- NIEUW
+        self.beheer_notebook.add(self.aanwezigheid_beheer_frame, text='Aanwezigheden Beheren (Nieuw)') 
 
     def _build_dashboard_tab(self):
         self.dashboard_notebook = ttk.Notebook(self.tab_dashboard)
@@ -292,8 +292,8 @@ class MainView(tk.Tk):
         self.categorie_analyse_frame = CategorieAnalyseFrame(self.dashboard_notebook, self)
         self.co2_analyse_frame = CO2AnalyseFrame(self.dashboard_notebook, self)
         self.tab_gezondheid_analyse = GezondheidAnalyseFrame(self.dashboard_notebook, self)
-        self.aanwezigheid_analyse_frame = AanwezigheidsAnalyseFrame(self.dashboard_notebook, self) # <-- NIEUW
-        self.reistijd_analyse_frame = ReistijdAnalyseFrame(self.dashboard_notebook, self) # <-- NIEUW
+        self.aanwezigheid_analyse_frame = AanwezigheidsAnalyseFrame(self.dashboard_notebook, self) 
+        self.reistijd_analyse_frame = ReistijdAnalyseFrame(self.dashboard_notebook, self) 
 
         self.dashboard_notebook.add(self.overzicht_frame, text='Overzicht Data')
         self.dashboard_notebook.add(self.vervoer_analyse_frame, text='Vervoersmiddelen')
@@ -302,8 +302,8 @@ class MainView(tk.Tk):
         self.dashboard_notebook.add(self.categorie_analyse_frame, text='Afstandscategorieën (Extra)')
         self.dashboard_notebook.add(self.co2_analyse_frame, text='CO₂ Analyse (Uitbreiding)')
         self.dashboard_notebook.add(self.tab_gezondheid_analyse, text='Gezondheidsindex')
-        self.dashboard_notebook.add(self.aanwezigheid_analyse_frame, text='Aanwezigheidsanalyse (Nieuw)') # <-- NIEUW
-        self.dashboard_notebook.add(self.reistijd_analyse_frame, text='Reistijd Analyse (Nieuw)') # <-- NIEUW
+        self.dashboard_notebook.add(self.aanwezigheid_analyse_frame, text='Aanwezigheidsanalyse') 
+        self.dashboard_notebook.add(self.reistijd_analyse_frame, text='Reistijd Analyse') 
 
     def _map_sub_properties(self):
         """Mapt alle sub-component eigenschappen direct op self om controller.py intact te houden."""
@@ -368,7 +368,7 @@ class MainView(tk.Tk):
         self.btn_toggle_aanwezigheid = self.aanwezigheid_analyse_frame.btn_toggle_aanwezigheid
         self.canvas_aanwezigheid = self.aanwezigheid_analyse_frame.canvas_aanwezigheid
 
-        # Reistijd Analyse Mappings <-- NIEUW
+        # Reistijd Analyse Mappings 
         self.tree_reistijd_vervoer = self.reistijd_analyse_frame.tree_reistijd_vervoer
         self.tree_reistijd_klas = self.reistijd_analyse_frame.tree_reistijd_klas
         self.btn_toggle_reistijd = self.reistijd_analyse_frame.btn_toggle_reistijd
